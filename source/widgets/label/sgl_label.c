@@ -34,6 +34,27 @@
 
 
 /**
+ * @brief to update area of the label
+ * @param label pointer to the label object
+ * @return none
+ */
+static void sgl_label_update_area(sgl_label_t *label)
+{
+    sgl_area_t area;
+    sgl_pos_t align_pos;
+    
+    if (label->font) {
+        align_pos = sgl_get_text_pos(&label->obj.coords, label->font, label->text, 0, (sgl_align_type_t)label->align);
+        area.x1 = align_pos.x + label->transform.offset.offset_x;
+        area.x2 = area.x1 + sgl_font_get_string_width(label->text, label->font);
+        area.y1 = align_pos.y;
+        area.y2 = area.y1 + sgl_font_get_height(label->font);
+        sgl_obj_update_area(&area);
+    }
+}
+
+
+/**
  * @brief construct the label object
  * @param surf pointer to the surface
  * @param obj pointer to the label object
@@ -151,7 +172,7 @@ void sgl_label_set_text(sgl_obj_t *obj, char *text)
     }
 
     label->text = text;
-    sgl_obj_set_dirty(obj);
+    sgl_label_update_area(label);
 }
 
 
@@ -199,7 +220,7 @@ void sgl_label_set_text_fmt(sgl_obj_t* obj, const char *fmt, ...)
     sgl_vsnprintf(label->text, label->text_capacity, fmt, args);
     va_end(args);
 
-    sgl_obj_set_dirty(obj);
+    sgl_label_update_area(label);
 }
 
 /**
