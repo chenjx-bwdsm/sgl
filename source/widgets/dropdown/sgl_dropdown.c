@@ -183,6 +183,7 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
         }
         break;
 
+    case SGL_EVENT_KEY_ENTER:
     case SGL_EVENT_CLICKED:
         if (dropdown->is_open) {
             dropdown->is_open = false;
