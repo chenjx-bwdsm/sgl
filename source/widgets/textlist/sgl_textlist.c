@@ -152,7 +152,7 @@ static void sgl_textlist_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
     break;
 
     case SGL_EVENT_CLICKED:
-    case SGL_EVENT_KEY_ENTER:
+    case SGL_EVENT_KEY_ENTER: {
         int16_t click_y = evt->pos.y;
         int16_t local_y = click_y - obj->coords.y1;
 
@@ -160,6 +160,7 @@ static void sgl_textlist_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
         if (clicked_index >= 0 && clicked_index < textlist->item_num) {
             sgl_textlist_change_item(textlist, item_height, clicked_index);
         }
+    }
     break;
 
     case SGL_EVENT_KEY_DOWN:
