@@ -85,7 +85,7 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
 
         if (dropdown->is_open) {
             sgl_draw_icon(surf, &obj->area, obj->coords.x2 - dropdown_icon.width - obj->radius, 
-                            obj->coords.y1 + (item_height - dropdown_icon.height + 1) / 2, dropdown->text_color, dropdown->alpha, &dropdown_icon);
+                            obj->coords.y1 + (item_height - dropdown_icon.height + 1) / 2 + 2, dropdown->text_color, dropdown->alpha, &dropdown_icon);
         }
         else {
             sgl_draw_icon(surf, &obj->area, obj->coords.x2 - dropdown_icon.width - obj->radius,
