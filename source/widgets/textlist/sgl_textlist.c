@@ -64,15 +64,15 @@ static void sgl_textlist_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
     };
     const int item_height = sgl_font_get_height(textlist->font) + 2 * SGL_TEXTLIST_ITEM_SPACE;
     const int list_h = obj->coords.y2 - obj->coords.y1 + 1;
+    sgl_textlist_item_t *item = textlist->head;
 
     switch (evt->type) {
-    case SGL_EVENT_DRAW_MAIN:
+    case SGL_EVENT_DRAW_MAIN: {
         const int item_pad = sgl_max(obj->radius, obj->border + SGL_TEXTLIST_ITEM_PAD);
         const int16_t text_pos_x1 = obj->coords.x1 + item_pad;
         const int16_t text_pos_x2 = obj->coords.x2 - item_pad;
         int16_t text_pos_y =  obj->coords.y1 + SGL_TEXTLIST_ITEM_SPACE;
         const int16_t hline_h = item_height - SGL_TEXTLIST_ITEM_SPACE;
-        sgl_textlist_item_t *item = textlist->head;
 
         int item_idx = 0;
         sgl_rect_t select = {
@@ -122,21 +122,22 @@ static void sgl_textlist_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
             item = item->next;
             item_idx++;
         }
-        break;
+    }
+    break;
     
     case SGL_EVENT_MOVE_UP:
         if((textlist->pos_y + (textlist->item_num) * item_height) >= (list_h - item_height / 2)) {
             textlist->pos_y -= evt->distance;
         }
         sgl_obj_set_dirty(obj);
-        break;
+    break;
 
     case SGL_EVENT_MOVE_DOWN:
         if(textlist->pos_y < item_height / 2) {
             textlist->pos_y += evt->distance;
         }
         sgl_obj_set_dirty(obj);
-        break;
+    break;
     
     case SGL_EVENT_RELEASED:
         if (textlist->pos_y > 0) {
@@ -148,7 +149,7 @@ static void sgl_textlist_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
             textlist->pos_y = list_h - textlist->item_num * item_height;
             sgl_obj_set_dirty(obj);
         }
-        break;
+    break;
 
     case SGL_EVENT_CLICKED:
     case SGL_EVENT_KEY_ENTER:
@@ -159,7 +160,7 @@ static void sgl_textlist_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
         if (clicked_index >= 0 && clicked_index < textlist->item_num) {
             sgl_textlist_change_item(textlist, item_height, clicked_index);
         }
-        break;
+    break;
 
     case SGL_EVENT_KEY_DOWN:
         if (textlist->item_selected < (textlist->item_num - 1)) {
@@ -171,19 +172,17 @@ static void sgl_textlist_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
         if (textlist->item_selected > 0) {
             sgl_textlist_change_item(textlist, item_height, textlist->item_selected - 1);
         }
-        break;
+    break;
 
     case SGL_EVENT_DESTROYED:
-        item = textlist->head;
         while (item != NULL) {
             sgl_textlist_item_t *next = item->next;
             sgl_free(item);
             item = next;
         }
-        break;
+    break;
 
-    default:
-        break;
+    default: break;
     }
 }
 

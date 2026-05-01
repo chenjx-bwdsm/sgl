@@ -75,12 +75,12 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
         dropdown->option_h = sgl_obj_get_height(obj);
     };
     const int list_h = dropdown->option_h * dropdown->max_visible_item;
+    sgl_dropdown_item_t *item = dropdown->head;
 
     switch (evt->type) {
     case SGL_EVENT_DRAW_MAIN:
         bg_coords.y2 = bg_coords.y1 + dropdown->option_h - 1;
         sgl_draw_rect(surf, &obj->area, &bg_coords, &bg_desc);
-        sgl_dropdown_item_t *item = dropdown->head;
         const int text_pos_y = (dropdown->option_h - sgl_font_get_height(dropdown->font) + 1) / 2;
 
         if (dropdown->is_open) {
@@ -213,7 +213,6 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
         break;
 
     case SGL_EVENT_DESTROYED:
-        item = dropdown->head;
         while (item != NULL) {
             sgl_dropdown_item_t *next = item->next;
             sgl_free(item);
