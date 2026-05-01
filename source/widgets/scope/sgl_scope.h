@@ -38,9 +38,7 @@
  extern "C" {
  #endif
  
- 
-#define SCOPE_MAGIC 0xDEADBEEF
-#define SGL_SCOPE_MAX_CHANNELS 4
+#define SGL_SCOPE_MAX_CHANNELS    4
 
 typedef struct {
     sgl_obj_t obj;
@@ -49,18 +47,17 @@ typedef struct {
     uint32_t current_indices[SGL_SCOPE_MAX_CHANNELS];    // current write index per channel
     uint16_t display_counts[SGL_SCOPE_MAX_CHANNELS];     // display count per channel
     const sgl_font_t *y_label_font;    // font of Y axis labels
-    uint32_t  magic;                  // magic number for validity check
     uint32_t  data_len;                // data length per channel
+    uint32_t  max_display_points;      // max display points
+    sgl_color_t y_label_color;         // color of Y axis labels
     sgl_color_t bg_color;              // background color
     sgl_color_t grid_color;            // grid line color
     sgl_color_t border_color;          // border color
-    uint32_t  max_display_points;       // max display points
-    sgl_color_t y_label_color;         // color of Y axis labels
     int16_t min_value;                 // min value of data
     int16_t max_value;                 // max value of data
     int16_t running_min;               // min value of runtime
     int16_t running_max;               // max value of runtime
-    uint8_t   channel_count;           // number of channels (1-4)
+    uint8_t channel_count;             // number of channels (1-4)
     uint8_t auto_scale : 1;            // whether to automatically scale
     uint8_t show_y_labels : 1;         // whether to show Y axis labels
     uint8_t border_width;              // outer border width
@@ -69,8 +66,7 @@ typedef struct {
     uint8_t grid_style;                // grid line style（0-solid line，other: dashed line
     uint8_t dirty_rect_count;          // local dirty rectangle count used by waveform updates
 } sgl_scope_t;
- 
- 
+
 /**
  * @brief create scope object
  * @param parent parent object

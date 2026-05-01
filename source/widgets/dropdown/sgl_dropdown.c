@@ -76,7 +76,8 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
     };
     const int list_h = dropdown->option_h * dropdown->max_visible_item;
 
-    if (evt->type == SGL_EVENT_DRAW_MAIN) {
+    switch (evt->type) {
+    case SGL_EVENT_DRAW_MAIN:
         bg_coords.y2 = bg_coords.y1 + dropdown->option_h - 1;
         sgl_draw_rect(surf, &obj->area, &bg_coords, &bg_desc);
         sgl_dropdown_item_t *item = dropdown->head;
@@ -162,24 +163,27 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
                 item_idx ++;
             }
         }
-    }
-    else if (evt->type == SGL_EVENT_MOVE_UP) {
+        break;
+    
+    case SGL_EVENT_MOVE_UP:
         if (dropdown->is_open) {
             if((dropdown->pos_y + (dropdown->item_num) * item_height) >= (list_h - item_height / 2)) {
                 dropdown->pos_y -= evt->distance;
             }
             sgl_obj_set_dirty(obj);
         }
-    }
-    else if (evt->type == SGL_EVENT_MOVE_DOWN) {
+        break;
+
+    case SGL_EVENT_MOVE_DOWN:
         if (dropdown->is_open) {
             if(dropdown->pos_y < item_height / 2) {
                 dropdown->pos_y += evt->distance;
             }
             sgl_obj_set_dirty(obj);
         }
-    }
-    else if (evt->type == SGL_EVENT_CLICKED) {
+        break;
+
+    case SGL_EVENT_CLICKED:
         if (dropdown->is_open) {
             dropdown->is_open = false;
             obj->coords.y2 =  obj->coords.y1 + dropdown->option_h - 1;
@@ -193,8 +197,9 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
         }
 
         sgl_obj_set_dirty(obj);
-    }
-    else if (evt->type == SGL_EVENT_RELEASED) {
+        break;
+
+    case SGL_EVENT_RELEASED:
         if (dropdown->pos_y > 0) {
             dropdown->pos_y = 0;
             sgl_obj_set_dirty(obj);
@@ -204,6 +209,18 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
             dropdown->pos_y = list_h - dropdown->item_num * item_height;
             sgl_obj_set_dirty(obj);
         }
+        break;
+
+    case SGL_EVENT_DESTROYED:
+        item = dropdown->head;
+        while (item != NULL) {
+            sgl_dropdown_item_t *next = item->next;
+            sgl_free(item);
+            item = next;
+        }
+        break;
+
+    default: break;
     }
 }
 
