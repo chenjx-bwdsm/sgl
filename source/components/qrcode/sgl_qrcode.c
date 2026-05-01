@@ -237,6 +237,18 @@ void sgl_qrcode_set_qr_version(sgl_obj_t *obj, uint8_t version)
         SGL_LOG_ERROR("Invalid QR version");
         return;
     }
+    /* re-aclloating the qrcode buffer by newly sepcified version */
+    const size_t qr_buf_size = (size_t)qrcodegen_BUFFER_LEN_FOR_VERSION(version);
+    if(qrcode->qr_buf) {
+        sgl_free(qrcode->qr_buf);
+        qrcode->qr_buf = NULL;
+    }
+    qrcode->qr_buf = sgl_malloc(qr_buf_size);
+    if (!qrcode->qr_buf) {
+        SGL_LOG_ERROR("sgl_qrcode_set_qr_version: malloc failed");
+        return;
+    }
+    memset(qrcode->qr_buf, 0, qr_buf_size);
 
     qrcode->qr_version = version;
 
