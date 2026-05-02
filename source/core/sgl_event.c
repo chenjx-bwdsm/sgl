@@ -358,6 +358,7 @@ void sgl_event_task(void)
                 obj->pressed = false;
                 evt_ctx.last_click = NULL;
             }
+
             event_callback(obj, &evt);
             if (evt_ctx.last_motion) {
                 event_callback(evt_ctx.last_motion, &evt);

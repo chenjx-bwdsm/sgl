@@ -37,7 +37,33 @@
  * @file sgl_viewlist.h
  * You can use this file to create a viewlist object
  * For example:
- *  
+ * 
+ *   void viewlist_click_cb(sgl_event_t *event)
+ *   {
+ *       sgl_obj_t *label = (sgl_obj_t *)event->param;
+ *       if (event->type == SGL_EVENT_CLICKED) {
+ *           SGL_LOG_INFO("Clicked: %s", sgl_label_get_text(label));
+ *       }
+ *   }
+ *
+ *   void test_viewlist(sgl_obj_t *parent)
+ *   {
+ *       sgl_obj_t *list = sgl_viewlist_create(parent);
+ *       sgl_obj_set_size(list, 200, 300);
+ *       sgl_obj_set_pos(list, 50, 10);
+ *
+ *       for (int i = 0; i < 20; i++) {
+ *           sgl_obj_t *label = sgl_label_create(list);
+ *           sgl_label_set_radius(label, 5);
+ *           sgl_label_set_bg_color(label, SGL_COLOR_WHEAT);
+ *           sgl_label_set_font(label, &consolas24);
+ *           sgl_label_set_text_fmt(label, "List Item %d", i);
+ *           sgl_obj_set_event_cb(label, viewlist_click_cb, label);
+ *
+ *           sgl_viewlist_set_item_height(list, 50);
+ *           sgl_viewlist_append_obj(list, label);
+ *       }
+ *   }
  */
 
 
