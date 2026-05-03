@@ -225,7 +225,7 @@ static struct sgl_obj* click_detect_object(sgl_event_pos_t *pos)
      * because the object may be a label attached to the object
     */
     if (find != NULL) {
-        return sgl_obj_is_clickable(find) ? find : (sgl_obj_is_clickable(find->parent) ? find->parent : NULL);
+        return sgl_obj_is_clickable(find) ? find : find->parent;
     }
 
     return find;
@@ -305,6 +305,22 @@ static inline void event_callback(sgl_obj_t *obj, sgl_event_t *evt)
 
 
 /**
+ * @brief Inject motion event to the object
+ * @param obj The object that triggered the event
+ * @param evt The event that triggered the callback
+ * @return none
+ */
+static inline void event_inject_motion(sgl_obj_t *obj, sgl_event_t *evt)
+{
+    while (!sgl_obj_is_movable(obj) && obj != sgl_screen_act()) {
+        obj = obj->parent;
+    }
+    evt_ctx.last_motion = obj;
+    event_callback(obj, evt);
+}
+
+
+/**
  * @brief All event task in SGL, this function will traverse all elements in the event queue, 
  *        respond to each element with an event, so that all events will trigger and point to the 
  *        corresponding callback function
@@ -326,13 +342,11 @@ void sgl_event_task(void)
                 obj = click_detect_object(&evt.pos);
             } else {
                 obj = evt_ctx.last_click;
-                sgl_get_move_info(&evt);
-
-                if (obj && !sgl_obj_is_movable(obj)) {
-                    evt_ctx.last_motion = obj->parent;
-                    event_callback(evt_ctx.last_motion, &evt);
-                    continue;
+                if (obj) {
+                    sgl_get_move_info(&evt);
+                    event_inject_motion(obj, &evt);
                 }
+                continue;
             }
         }
 
@@ -355,12 +369,15 @@ void sgl_event_task(void)
                     }
                     continue;
                 }
+                if (evt_ctx.last_motion == obj) {
+                    evt_ctx.last_motion = NULL;
+                }
                 obj->pressed = false;
                 evt_ctx.last_click = NULL;
             }
 
             event_callback(obj, &evt);
-            if (evt_ctx.last_motion) {
+            if (evt_ctx.last_motion && evt_ctx.last_motion != obj) {
                 event_callback(evt_ctx.last_motion, &evt);
                 evt_ctx.last_motion = NULL;
             }
