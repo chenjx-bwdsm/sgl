@@ -118,8 +118,8 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
             sgl_area_t bg_area = {
                 .x1 = obj->area.x1,
                 .x2 = obj->area.x2,
-                .y1 = bg_coords.y1,
-                .y2 = bg_coords.y2,
+                .y1 = sgl_max(bg_coords.y1, obj->coords.y1),
+                .y2 = sgl_min(bg_coords.y2, obj->coords.y2),
             };
 
             int16_t text_pos_y =  bg_coords.y1 + SGL_DROPDOWN_OPTION_SPACE;

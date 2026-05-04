@@ -627,7 +627,7 @@ int sgl_fbdev_register(sgl_fbinfo_t *fbinfo);
  * @return int, 0 if success, -1 if failed
  * @note you must check the result of this function
  */
-int sgl_fbdev_register_buffer(sgl_color_t *buffer0, sgl_color_t *buffer1, uint32_t buffer_size, uint16_t resolution_x, uint16_t resolution_y);
+int sgl_fbdev_register_dev(sgl_color_t *buffer0, sgl_color_t *buffer1, uint32_t buffer_size, uint16_t resolution_x, uint16_t resolution_y);
 
 
 /**
