@@ -309,22 +309,6 @@ static inline void event_callback(sgl_obj_t *obj, sgl_event_t *evt)
 
 
 /**
- * @brief Callback function for event type
- * @param obj The object that triggered the event
- * @param type The type of the event
- * @return none
- */
-static void event_type_callback(sgl_obj_t *obj, sgl_event_type_t type)
-{
-    sgl_event_t evt;
-    evt.param = obj->event_data;
-    evt.type = type;
-    evt.obj = obj;
-    obj->construct_fn(NULL, obj, &evt);
-}
-
-
-/**
  * @brief Inject motion event to the object
  * @param obj The object that triggered the event
  * @param evt The event that triggered the callback
@@ -508,6 +492,21 @@ void sgl_event_pos_input(int16_t x, int16_t y, bool flag)
 }
 
 #if (CONFIG_SGL_EVENT_PHY_KAY)
+/**
+ * @brief Callback function for event type
+ * @param obj The object that triggered the event
+ * @param type The type of the event
+ * @return none
+ */
+static void event_type_callback(sgl_obj_t *obj, sgl_event_type_t type)
+{
+    sgl_event_t evt;
+    evt.param = obj->event_data;
+    evt.type = type;
+    evt.obj = obj;
+    obj->construct_fn(NULL, obj, &evt);
+}
+
 /**
  * @brief Physical keyboard event UP
  * @param none
