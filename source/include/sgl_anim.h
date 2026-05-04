@@ -97,7 +97,7 @@ typedef int32_t (*sgl_anim_path_algo_t)(uint16_t elaps, uint16_t duration, int32
  */
 typedef struct sgl_anim {
     void                  *data;
-    struct sgl_anim       *next;
+    sgl_list_node_t       node;
     uint16_t              act_time;
     uint16_t              act_delay;
     uint16_t              act_duration;
@@ -113,26 +113,8 @@ typedef struct sgl_anim {
 } sgl_anim_t;
 
 
-/**
- * @brief animation context, it will be used to store status of animation
- * @anim_list_head: animation list head
- * @anim_list_tail: animation list tail
- */
-typedef struct sgl_anim_ctx {
-    sgl_anim_t *anim_list_head;
-    sgl_anim_t *anim_list_tail;
-} sgl_anim_ctx_t;
-
-
-#define  sgl_anim_for_each(anim, head)                 for ((anim) = (head)->anim_list_head; (anim) != NULL; (anim) = (anim)->next)
-#define  sgl_anim_for_each_safe(anim, n, head)         for (anim = (head)->anim_list_head, n = (anim) ? (anim)->next : NULL; anim != NULL; anim = n, n = (anim) ? (anim)->next : NULL)
-
 #define  SGL_ANIM_REPEAT_LOOP                          (0x3FFF)
 #define  SGL_ANIM_REPEAT_ONCE                          (1)
-
-
-/* Animation context it will be used internally */
-extern sgl_anim_ctx_t sgl_anim_ctx;
 
 
 /**

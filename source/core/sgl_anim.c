@@ -30,12 +30,8 @@
 
 
 #if (CONFIG_SGL_ANIMATION)
-
-sgl_anim_ctx_t sgl_anim_ctx = {
-    .anim_list_head = NULL,
-    .anim_list_tail = NULL,
-};
-
+/* animation context */
+static SGL_LIST_HEAD(anim_head);
 
 /**
  * @brief  Animation static initialization
@@ -44,7 +40,7 @@ sgl_anim_ctx_t sgl_anim_ctx = {
  */
 void sgl_anim_init(sgl_anim_t *anim)
 {
-    anim->next = NULL;
+    sgl_list_init(&anim->node);
     anim->data = NULL;
     anim->act_delay = 0;
     anim->act_duration = 0;
@@ -83,18 +79,9 @@ sgl_anim_t* sgl_anim_create(void)
  * @param  anim animation object
  * @return none
 */
-static void sgl_anim_add(sgl_anim_t *anim)
+static inline void sgl_anim_add(sgl_anim_t *anim)
 {
-    if (sgl_anim_ctx.anim_list_tail != NULL) {
-        sgl_anim_ctx.anim_list_tail->next = anim;
-        sgl_anim_ctx.anim_list_tail = anim;
-    }
-    else {
-        sgl_anim_ctx.anim_list_head = anim;
-        sgl_anim_ctx.anim_list_tail = anim;
-    }
-
-    anim->next = NULL;
+    sgl_list_add_node_at_tail(&anim_head, &anim->node);
     anim->finished = 0;
 }
 
@@ -104,32 +91,10 @@ static void sgl_anim_add(sgl_anim_t *anim)
  * @param  anim animation object
  * @return none
 */
-static void sgl_anim_remove(sgl_anim_t *anim)
+static inline void sgl_anim_remove(sgl_anim_t *anim)
 {
     SGL_ASSERT(anim != NULL);
-    sgl_anim_t *prev = NULL;
-
-    if (sgl_anim_ctx.anim_list_head == anim) {
-        sgl_anim_ctx.anim_list_head = anim->next;
-        if (sgl_anim_ctx.anim_list_head == NULL) {
-            sgl_anim_ctx.anim_list_tail = NULL;
-        }
-        return;
-    }
-
-    prev = sgl_anim_ctx.anim_list_head;
-    while (prev != NULL && prev->next != anim) {
-        prev = prev->next;
-    }
-
-    if (prev == NULL) {
-        return;
-    }
-    prev->next = anim->next;
-
-    if (anim == sgl_anim_ctx.anim_list_tail) {
-        sgl_anim_ctx.anim_list_tail = prev;
-    }
+    sgl_list_del_node(&anim->node);
 }
 
 
@@ -201,7 +166,7 @@ void sgl_anim_task(void)
     const uint32_t current_tick = sgl_tick_get();
     sgl_anim_t *anim = NULL, *next = NULL;
 
-    sgl_anim_for_each_safe(anim, next, &sgl_anim_ctx) {
+    sgl_list_for_each_entry_safe(anim, next, &anim_head, sgl_anim_t, node) {
         if(current_tick < anim->act_time) {
             continue;
         }

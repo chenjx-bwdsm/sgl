@@ -133,12 +133,11 @@ typedef struct sgl_list_node {
  * @return none
  */
 #define sgl_list_for_each_entry_safe(pos, n, list_head, entry_type, list_node_member) \
-    for (pos = (list_head)->next ? sgl_container_of((list_head)->next, entry_type, list_node_member) : NULL, \
-         n = pos ? sgl_container_of(pos->list_node_member.next, entry_type, list_node_member) : NULL; \
+    for (pos = sgl_container_of((list_head)->next, entry_type, list_node_member), \
+         n = sgl_container_of(pos->list_node_member.next, entry_type, list_node_member); \
          &pos->list_node_member != (list_head); \
          pos = n, \
-         n = pos ? (pos->list_node_member.next ? sgl_container_of(pos->list_node_member.next, entry_type, list_node_member) : NULL) : NULL)
-
+         n = sgl_container_of(n->list_node_member.next, entry_type, list_node_member))
 
 /**
  * @brief reverse foreach the list inserted in a structure.
