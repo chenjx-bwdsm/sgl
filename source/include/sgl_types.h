@@ -92,6 +92,7 @@ extern "C" {
 #define SGL_ALPHA_MAX                           (255)
 #define SGL_ALPHA_MIN                           (0)
 #define SGL_ALPHA_NUM                           (256)
+#define SGL_ALPHA_PRCNT(x)                      ((x) * SGL_ALPHA_MAX / 100)
 
 
 #define SGL_STYLE_OK                            (0)
