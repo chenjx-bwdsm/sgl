@@ -122,7 +122,9 @@ sgl_obj_t* sgl_led_create(sgl_obj_t* parent)
  */
 void sgl_led_set_radius(sgl_obj_t *obj, uint8_t radius)
 {
-    obj->radius > 0 ? sgl_obj_size_zoom(obj, radius - obj->radius) : 0;
+    if (obj->radius > 0) {
+        sgl_obj_size_zoom(obj, radius - obj->radius);
+    }
     obj->radius = radius;
     sgl_obj_set_dirty(obj);
 }

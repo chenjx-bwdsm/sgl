@@ -105,7 +105,9 @@ void sgl_circle_set_color(sgl_obj_t *obj, sgl_color_t color)
 void sgl_circle_set_radius(sgl_obj_t *obj, uint16_t radius)
 {
     sgl_circle_t *circle = sgl_container_of(obj, sgl_circle_t, obj);
-    obj->radius > 0 ? sgl_obj_size_zoom(obj, radius - obj->radius) : 0;
+    if (obj->radius > 0) {
+        sgl_obj_size_zoom(obj, radius - obj->radius);
+    }
     circle->desc.radius = obj->radius = radius;
     sgl_obj_set_dirty(obj);
 }

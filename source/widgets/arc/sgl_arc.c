@@ -159,7 +159,9 @@ void sgl_arc_set_alpha(sgl_obj_t *obj, uint8_t alpha)
 void sgl_arc_set_radius(sgl_obj_t *obj, int16_t radius_in, int16_t radius_out)
 {
     sgl_arc_t *arc = sgl_container_of(obj, sgl_arc_t, obj);
-    obj->radius > 0 ? sgl_obj_size_zoom(obj, radius_out - obj->radius) : 0;
+    if (obj->radius > 0) {
+        sgl_obj_size_zoom(obj, radius_out - obj->radius);
+    }
     arc->desc.radius_in = radius_in;
     arc->desc.radius_out = obj->radius = radius_out;
     sgl_obj_set_dirty(obj);
