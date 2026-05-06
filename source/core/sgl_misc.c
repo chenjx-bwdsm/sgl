@@ -344,7 +344,6 @@ void sgl_monitor_trace(sgl_surf_t *surf)
 
     if (monitor) {
         if (tick != sgl_system.last_tick) {
-            SGL_LOG_INFO("FPS:%d", fps_count);
             tick = sgl_system.last_tick;
             fps_count ++;
         }
@@ -380,7 +379,7 @@ void sgl_monitor_trace(sgl_surf_t *surf)
         fps = sgl_label_create(monitor);
         sgl_obj_set_pos(fps, 0, 0);
         sgl_obj_set_size(fps, SGL_MONITOR_COORDS_WIDTH, SGL_MONITOR_COORDS_HEIGHT / 2);
-        fps->area = fps->coords;
+        fps->area = monitor->coords;
         sgl_label_set_font(fps, &monitor_font);
         sgl_label_set_text_align(fps, SGL_ALIGN_LEFT_MID);
         sgl_label_set_text(fps, fps_str);
@@ -389,7 +388,7 @@ void sgl_monitor_trace(sgl_surf_t *surf)
         mem = sgl_label_create(monitor);
         sgl_obj_set_pos(mem, 0, SGL_MONITOR_COORDS_HEIGHT / 2);
         sgl_obj_set_size(mem, SGL_MONITOR_COORDS_WIDTH, SGL_MONITOR_COORDS_HEIGHT / 2);
-        mem->area = mem->coords;
+        mem->area = monitor->coords;
         sgl_label_set_font(mem, &monitor_font);
         sgl_label_set_text_align(mem, SGL_ALIGN_LEFT_MID);
         sgl_label_set_text(mem, mem_str);
