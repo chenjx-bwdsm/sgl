@@ -87,6 +87,14 @@ void sgl_switch_set_bg_color(sgl_obj_t *obj, sgl_color_t color);
 void sgl_switch_set_knob_color(sgl_obj_t *obj, sgl_color_t color);
 
 /**
+ * @brief Set the pixmap of the switch object
+ * @param obj  Pointer to the switch object
+ * @param pixmap  Pointer to the pixmap
+ * @return none
+ */
+void sgl_switch_set_pixmap(sgl_obj_t *obj, const sgl_pixmap_t *pixmap);
+
+/**
  * @brief set switch alpha
  * @param obj switch object
  * @param alpha switch alpha

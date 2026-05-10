@@ -152,6 +152,20 @@ void sgl_switch_set_knob_color(sgl_obj_t *obj, sgl_color_t color)
     sgl_obj_set_dirty(obj);
 }
 
+
+/**
+ * @brief Set the pixmap of the switch object
+ * @param obj  Pointer to the switch object
+ * @param pixmap  Pointer to the pixmap
+ * @return none
+ */
+void sgl_switch_set_pixmap(sgl_obj_t *obj, const sgl_pixmap_t *pixmap)
+{
+    sgl_switch_t *switch_obj = sgl_container_of(obj, sgl_switch_t, obj);
+    switch_obj->pixmap = pixmap;
+    sgl_obj_set_dirty(obj);
+}
+
 /**
  * @brief set switch alpha
  * @param obj switch object
