@@ -86,10 +86,10 @@ static void sgl_slider_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_
         evt->type == SGL_EVENT_MOVE_DOWN || evt->type == SGL_EVENT_MOVE_UP || evt->type == SGL_EVENT_MOVE_LEFT || evt->type == SGL_EVENT_MOVE_RIGHT
     ) {
         if(slider->direct == SGL_DIRECT_HORIZONTAL) {
-            slider->value = (evt->pos.x - obj->coords.x1) * 100 / (obj->coords.x2 - obj->coords.x1);
+            slider->value = sgl_clamp((evt->pos.x - obj->coords.x1) * 100 / (obj->coords.x2 - obj->coords.x1), 0, 100);
         }
         else {
-            slider->value = (obj->coords.y2 - evt->pos.y) * 100 / (obj->coords.y2 - obj->coords.y1);
+            slider->value = sgl_clamp((obj->coords.y2 - evt->pos.y) * 100 / (obj->coords.y2 - obj->coords.y1), 0, 100);
         }
 
         if(evt->type == SGL_EVENT_PRESSED) {
