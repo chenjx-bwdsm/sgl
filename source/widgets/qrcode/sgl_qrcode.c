@@ -47,9 +47,10 @@ static void qrcode_get_pixmap_size(sgl_qrcode_t *qrcode, sgl_rect_t *mod)
     /* safe zone, not fill the ecc all area */
     allow = allow * 80 / 100;
     mod_size = sgl_sqrt(allow);
-    mod->x1 = mod->y1 = qrcode->scale * ((qrcode->qrcode.size - mod_size) / 2 + qrcode->zone);
-    mod->x2 = mod->x1 + mod_size * qrcode->scale;
-    mod->y2 = mod->y1 + mod_size * qrcode->scale;
+    mod->y1 = qrcode->scale * ((qrcode->qrcode.size - mod_size + 1) / 2 + qrcode->zone);
+    mod->x1 = mod->y1 + 1;
+    mod->x2 = mod->x1 + mod_size * qrcode->scale - 1;
+    mod->y2 = mod->y1 + mod_size * qrcode->scale - 1;
 }
 
 
@@ -80,11 +81,11 @@ static void sgl_qrcode_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_
         for (uint8_t y = 0; y < qrcode->qrcode.size; y ++) {
             coords.x1 = obj->coords.x1 + qrcode->zone;
             coords.y1 += qrcode->scale;
-            coords.y2 = coords.y1 + qrcode->scale;
+            coords.y2 = coords.y1 + qrcode->scale - 1;
 
             for (uint8_t x = 0; x < qrcode->qrcode.size; x ++) {
                 coords.x1 += qrcode->scale;
-                coords.x2 = coords.x1 + qrcode->scale;
+                coords.x2 = coords.x1 + qrcode->scale - 1;
                 if (qrcode_getModule(&qrcode->qrcode, x, y)) {
                     sgl_draw_rect(surf, &obj->area, &coords, &desc);
                 }
@@ -99,6 +100,9 @@ static void sgl_qrcode_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_
             coords.y2 += obj->coords.y1;
             sgl_draw_fill_rect_pixmap(surf, &obj->area, &coords, radius, qrcode->pixmap, qrcode->alpha);
         }
+    }
+    else if (evt->type == SGL_EVENT_DESTROYED) {
+        sgl_free(qrcode->data);
     }
 }
 
