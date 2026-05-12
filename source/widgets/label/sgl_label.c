@@ -156,26 +156,61 @@ sgl_obj_t* sgl_label_create(sgl_obj_t* parent)
 }
 
 /**
- * @brief set the text of the label
+ * @brief set the text buffer of the label
  * @param obj pointer to the label object
- * @param text pointer to the text
+ * @param buf pointer to the text buffer
+ * @param buf_size size of the text buffer
  * @return none
  */
-void sgl_label_set_text(sgl_obj_t *obj, char *text)
+void sgl_label_set_text_buffer(sgl_obj_t *obj, char *buf, uint16_t buf_size)
 {
+    sgl_label_t *label = sgl_container_of(obj, sgl_label_t, obj);
+    label->text = buf;
+    label->text_capacity = buf_size;
+}
+
+/**
+ * @brief set the text of the label
+ * @param obj pointer to the label object
+ * @param fmt pointer to the text
+ * @return none
+ */
+void sgl_label_set_text(sgl_obj_t *obj, const char *fmt, ...)
+{
+    va_list args;
     sgl_area_t area = SGL_AREA_INVALID, new_area = SGL_AREA_INVALID;
     sgl_label_t *label = sgl_container_of(obj, sgl_label_t, obj);
+
+    if (!label->text) {
+        return;
+    }
 
     sgl_label_update_area(label, label->text, &area);
     if (label->dynamic) {
         sgl_free((void *)label->text);
         label->dynamic = 0;
-        label->text_capacity = 0;
     }
 
-    label->text = text;
-    sgl_label_update_area(label, text, &new_area);
+    va_start(args, fmt);
+    sgl_vsnprintf(label->text, 128, fmt, args);
+    va_end(args);
+
+    sgl_label_update_area(label, label->text, &new_area);
     sgl_area_selfmerge(&area, &new_area);
+    sgl_obj_update_area(&area);
+}
+
+/**
+ * @brief update label text area
+ * @param obj pointer to the label object
+ * @return none
+ * @note you can update your label text area when you change the text buffer content
+ */
+void sgl_label_update_text(sgl_obj_t *obj)
+{
+    sgl_label_t *label = sgl_container_of(obj, sgl_label_t, obj);
+    sgl_area_t area = SGL_AREA_INVALID;
+    sgl_label_update_area(label, label->text, &area);
     sgl_obj_update_area(&area);
 }
 
