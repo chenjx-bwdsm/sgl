@@ -69,6 +69,14 @@ typedef struct sgl_label {
 sgl_obj_t* sgl_label_create(sgl_obj_t* parent);
 
 /**
+ * @brief set the text of the label
+ * @param obj pointer to the label object
+ * @param text pointer to the text
+ * @return none
+ */
+void sgl_label_set_text(sgl_obj_t *obj, char *text);
+
+/**
  * @brief set the text buffer of the label
  * @param obj pointer to the label object
  * @param buf pointer to the text buffer
@@ -78,12 +86,21 @@ sgl_obj_t* sgl_label_create(sgl_obj_t* parent);
 void sgl_label_set_text_buffer(sgl_obj_t *obj, char *buf, uint16_t buf_size);
 
 /**
- * @brief set the text of the label
+ * @brief set the text of the label with format by manual memory
  * @param obj pointer to the label object
  * @param fmt pointer to the text
  * @return none
+ * @note the text buffer must be set by sgl_label_set_text_buffer() before calling this function
  */
-void sgl_label_set_text(sgl_obj_t *obj, const char *fmt, ...);
+void sgl_label_set_text_fmt(sgl_obj_t *obj, const char *fmt, ...);
+
+/**
+ * @brief set the text of the label with format by dynamic memory
+ * @param obj pointer to the label object
+ * @param text pointer to the text
+ * @return none
+ */
+void sgl_label_set_text_fmt_dynamic(sgl_obj_t* obj, const char *fmt, ...);
 
 /**
  * @brief update label text area
@@ -99,14 +116,6 @@ void sgl_label_update_text(sgl_obj_t *obj);
  * @return pointer to the text
  */
 char* sgl_label_get_text(sgl_obj_t *obj);
-
-/**
- * @brief set the text of the label with format
- * @param obj pointer to the label object
- * @param text pointer to the text
- * @return none
- */
-void sgl_label_set_text_fmt(sgl_obj_t* obj, const char *fmt, ...);
 
 /**
  * @brief set label font
