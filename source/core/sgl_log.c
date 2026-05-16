@@ -45,16 +45,18 @@ void sgl_log(const char *level, const char * format, ...)
     int  tail = 0;
     int  pref_size = strlen(level);
 
-    strcpy(buffer, level);
+    snprintf(buffer, sizeof(buffer), "%s", level);
 
     va_list va;
     va_start(va, format);
-    sgl_vsnprintf(buffer + pref_size, sizeof(buffer), format, va);
+    sgl_vsnprintf(buffer + pref_size, sizeof(buffer) - pref_size, format, va);
     va_end(va);
 
     tail = strlen(buffer);
-    memcpy(&buffer[tail], &"\r\n"SGL_LOG_NONE, strlen("\r\n"SGL_LOG_NONE));
-    buffer[tail + strlen("\r\n"SGL_LOG_NONE)] = 0;
+    if (tail + (int)strlen("\r\n"SGL_LOG_NONE) < (int)sizeof(buffer) - 1) {
+        memcpy(&buffer[tail], &"\r\n"SGL_LOG_NONE, strlen("\r\n"SGL_LOG_NONE));
+        buffer[tail + strlen("\r\n"SGL_LOG_NONE)] = 0;
+    }
 
     sgl_log_stdout(buffer);
 }
