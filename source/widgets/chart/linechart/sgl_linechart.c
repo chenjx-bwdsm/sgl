@@ -406,8 +406,10 @@ static void sgl_linechart_fill_segment_under(sgl_surf_t *surf, const sgl_area_t 
 
         int16_t y_top = sgl_min(y, baseline_y);
         int16_t y_bottom = sgl_max(y, baseline_y);
-
-        sgl_draw_fill_vline(surf, (sgl_area_t *)area, x, y_top, y_bottom, 1, color, alpha);
+        if (i!=0)//group member @heliangzhen provided a fix for the line drawing issue
+        {
+            sgl_draw_fill_vline(surf, (sgl_area_t *)area, x, y_top, y_bottom, 1, color, alpha);
+        }
     }
 }
 
