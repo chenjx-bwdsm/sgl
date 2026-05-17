@@ -47,7 +47,6 @@ typedef struct sgl_progress {
     uint8_t            alpha;
     uint8_t            value;
     uint8_t            interval;
-    uint8_t            shift;
     uint8_t            knob_radius;
     uint8_t            knob_width;
 }sgl_progress_t;

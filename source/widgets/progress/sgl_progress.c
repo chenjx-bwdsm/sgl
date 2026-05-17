@@ -40,15 +40,11 @@ static void sgl_progress_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
     knob.x1 = obj->coords.x1 + obj->radius / 2 + obj->border;
     int16_t fill_radius;
     sgl_area_t rect = {
-        .x1 = obj->coords.x1 - progress->interval * 2 + progress->shift + obj->border + 1,
+        .x1 = obj->coords.x1 - progress->interval * 2 + obj->border + 1,
         .y1 = obj->coords.y1 + obj->border + 1,
         .x2 = 0,
         .y2 = obj->coords.y2 - obj->border - 1,
     };
-
-    if (progress->shift > (progress->interval + progress->knob_width)) {
-        progress->shift = 0;
-    }
 
     if(evt->type == SGL_EVENT_DRAW_MAIN) {
         knob.x2 = obj->coords.x1 - obj->radius / 2 - 2 + (obj->coords.x2 - obj->coords.x1) * progress->value / 100;
@@ -258,7 +254,6 @@ void sgl_progress_set_value(sgl_obj_t *obj, uint8_t value)
 {
     sgl_progress_t *progress = sgl_container_of(obj, sgl_progress_t, obj);
     progress->value = sgl_min(value, 100);
-    progress->shift ++;
     sgl_obj_set_dirty(obj);
 }
 
