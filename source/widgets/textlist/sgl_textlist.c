@@ -144,8 +144,7 @@ static void sgl_textlist_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
             textlist->pos_y = 0;
             sgl_obj_set_dirty(obj);
         }
-
-        if((textlist->pos_y + textlist->item_num * item_height) < list_h) {
+        else if((textlist->pos_y + textlist->item_num * item_height) < list_h) {
             textlist->pos_y = list_h - textlist->item_num * item_height;
             sgl_obj_set_dirty(obj);
         }

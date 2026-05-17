@@ -433,19 +433,19 @@ void sgl_event_pos_input(int16_t x, int16_t y, bool flag)
     static uint32_t start_ms;
     static bool touch;
     const uint32_t tick = sgl_tick_get();
-    int16_t dx, dy;
+    int16_t dx, dy, pos_x = x, pos_y = y;
 
     /* rotate touch position */
 #if (CONFIG_SGL_FBDEV_ROTATION != 0)
 #if (CONFIG_SGL_FBDEV_ROTATION == 90)
-    pos.x = sgl_min(SGL_SCREEN_WIDTH - y, SGL_SCREEN_WIDTH - 1);
-    pos.y = sgl_min(x, SGL_SCREEN_HEIGHT - 1);
+    pos_x = sgl_min(SGL_SCREEN_WIDTH - y, SGL_SCREEN_WIDTH - 1);
+    pos_y = sgl_min(x, SGL_SCREEN_HEIGHT - 1);
 #elif (CONFIG_SGL_FBDEV_ROTATION == 180)
-    pos.x = SGL_SCREEN_WIDTH - x - 1;
-    pos.y = SGL_SCREEN_HEIGHT - y - 1;
+    pos_x = SGL_SCREEN_WIDTH - x - 1;
+    pos_y = SGL_SCREEN_HEIGHT - y - 1;
 #elif (CONFIG_SGL_FBDEV_ROTATION == 270)
-    pos.x = sgl_min(y, SGL_SCREEN_WIDTH - 1);
-    pos.y = sgl_min(SGL_SCREEN_HEIGHT - x, SGL_SCREEN_HEIGHT - 1);
+    pos_x = sgl_min(y, SGL_SCREEN_WIDTH - 1);
+    pos_y = sgl_min(SGL_SCREEN_HEIGHT - x, SGL_SCREEN_HEIGHT - 1);
 #else
     #error "CONFIG_SGL_FBDEV_ROTATION is invalid rotation value (only 0/90/180/270 supported)"
 #endif
@@ -454,20 +454,20 @@ void sgl_event_pos_input(int16_t x, int16_t y, bool flag)
     if (flag) {
         if (!touch) {
             touch = true;
-            first_pos.x = x; first_pos.y = y;
+            first_pos.x = pos_x; first_pos.y = pos_y;
             curr_pos = first_pos;
             start_ms = tick;
             sgl_event_send_pos(first_pos, SGL_EVENT_PRESSED);
-            SGL_LOG_INFO("Touch PRESSED: pos: %d, %d", x, y);
+            SGL_LOG_INFO("Touch PRESSED: pos: %d, %d", pos_x, pos_y);
         }
         else {
-            dx = x - curr_pos.x;
-            dy = y - curr_pos.y;
+            dx = pos_x - curr_pos.x;
+            dy = pos_y - curr_pos.y;
             if (sgl_square_sum(dx, dy) > sgl_pow2(SGL_EVENT_MOVE_THRESHOLD)) {
-                curr_pos.x = x;
-                curr_pos.y = y;
+                curr_pos.x = pos_x;
+                curr_pos.y = pos_y;
                 sgl_event_send_pos(curr_pos, SGL_EVENT_MOTION);
-                SGL_LOG_INFO("Touch MOTION: pos: %d, %d", x, y);
+                SGL_LOG_INFO("Touch MOTION: pos: %d, %d", pos_x, pos_y);
             }
         }
     }

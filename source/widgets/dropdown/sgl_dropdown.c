@@ -206,8 +206,7 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
             dropdown->pos_y = 0;
             sgl_obj_set_dirty(obj);
         }
-
-        if((dropdown->pos_y + dropdown->item_num * item_height) < list_h) {
+        else if((dropdown->pos_y + dropdown->item_num * item_height) < list_h) {
             dropdown->pos_y = list_h - dropdown->item_num * item_height;
             sgl_obj_set_dirty(obj);
         }
