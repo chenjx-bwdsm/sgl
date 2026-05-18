@@ -337,14 +337,12 @@ void sgl_monitor_trace(sgl_surf_t *surf)
     static sgl_obj_t *fps = NULL;
     static sgl_obj_t *mem = NULL;
     sgl_obj_t *child = NULL;
-    static uint32_t fps_count = 0, last_tick = 0, tick = 0;
+    static uint32_t fps_count = 0, last_tick = 0;
     int cur_tick = sgl_tick_get();
-
     sgl_event_t evt = {0};
 
     if (monitor) {
-        if (tick != sgl_system.last_tick) {
-            tick = sgl_system.last_tick;
+        if ((surf->h + surf->y1) > surf->y2) {
             fps_count ++;
         }
 
