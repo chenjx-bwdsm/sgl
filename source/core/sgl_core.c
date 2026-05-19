@@ -748,7 +748,7 @@ int sgl_init(void)
         return -1;
     }
 
-    /* if the rotation is not 0 or 180, we need to alloc a buffer for rotation */
+    /* if the rotation is not 0, we need to alloc a buffer for rotation */
 #if ((CONFIG_SGL_FBDEV_ROTATION != 0) || CONFIG_SGL_FBDEV_RUNTIME_ROTATION)
     sgl_system.rotation = (sgl_color_t*)sgl_malloc(sgl_system.fbdev.fbinfo.buffer_size * sizeof(sgl_color_t));
     if (sgl_system.rotation == NULL) {
