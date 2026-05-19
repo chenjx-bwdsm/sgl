@@ -81,6 +81,11 @@ int sgl_fbdev_register(sgl_fbinfo_t *fbinfo)
 
     sgl_system.fbdev.fbinfo = *fbinfo;
 
+/* if panel is rotated at 90 or 270, swap the resolution of the frame buffer */
+#if (CONFIG_SGL_FBDEV_ROTATION == 90 || CONFIG_SGL_FBDEV_ROTATION == 270)
+    sgl_swap(&sgl_system.fbdev.fbinfo.xres, &sgl_system.fbdev.fbinfo.yres);
+#endif
+
     sgl_system.fbdev.surf.buffer = (sgl_color_t*)fbinfo->buffer[0];
     sgl_system.fbdev.surf.x1 = 0;
     sgl_system.fbdev.surf.y1 = 0;
