@@ -263,7 +263,7 @@ void sgl_event_task(void);
 void sgl_event_pos_input(int16_t x, int16_t y, bool flag);
 
 
-#if (CONFIG_SGL_EVENT_PHY_KAY)
+#if (CONFIG_SGL_EVENT_PHY_KEY)
 /**
  * @brief Physical keyboard event UP
  * @param none

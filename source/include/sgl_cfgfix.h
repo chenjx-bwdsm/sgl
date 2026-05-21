@@ -65,8 +65,8 @@ extern "C" {
 #define CONFIG_SGL_EVENT_QUEUE_SIZE                                (16)  /* Max input event queue size */
 #endif
 
-#ifndef CONFIG_SGL_EVENT_PHY_KAY
-#define CONFIG_SGL_EVENT_PHY_KAY                                   (0)  /* Physical keyboard enable */
+#ifndef CONFIG_SGL_EVENT_PHY_KEY
+#define CONFIG_SGL_EVENT_PHY_KEY                                   (0)  /* Physical keyboard enable */
 #endif
 
 #ifndef CONFIG_SGL_DIRTY_AREA_NUM_MAX
@@ -159,13 +159,6 @@ extern "C" {
 
 #ifndef CONFIG_SGL_BOOT_LOGO
 #define CONFIG_SGL_BOOT_LOGO                                       (1)  /* Show boot logo */
-#endif
-
-#ifndef CONFIG_SGL_BOOT_ANIMATION
-#   define CONFIG_SGL_BOOT_ANIMATION                               (0)  /* Boot animation enable */
-#elif (CONFIG_SGL_ANIMATION == 0)
-#   undef CONFIG_SGL_BOOT_ANIMATION
-#   define CONFIG_SGL_BOOT_ANIMATION                               (0)  /* Force disable if animation off */
 #endif
 
 #ifdef __cplusplus

@@ -58,7 +58,7 @@ static struct event_context {
     struct sgl_obj *last_click;
     struct sgl_obj *last_motion;
     sgl_event_pos_t last_touch;
-#if (CONFIG_SGL_EVENT_PHY_KAY)
+#if (CONFIG_SGL_EVENT_PHY_KEY)
     struct sgl_obj *focused;
     bool            focused_selected;
 #endif
@@ -508,7 +508,7 @@ void sgl_event_pos_input(int16_t x, int16_t y, bool flag)
     }
 }
 
-#if (CONFIG_SGL_EVENT_PHY_KAY)
+#if (CONFIG_SGL_EVENT_PHY_KEY)
 /**
  * @brief Callback function for event type
  * @param obj The object that triggered the event
