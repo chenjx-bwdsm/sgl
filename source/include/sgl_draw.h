@@ -25,20 +25,16 @@
 #ifndef __SGL_DRAW_H__
 #define __SGL_DRAW_H__ 
 
-
 #include <sgl_core.h>
-
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-
 #define  SGL_ARC_MODE_NORMAL                                (0)
 #define  SGL_ARC_MODE_RING                                  (1)
 #define  SGL_ARC_MODE_NORMAL_SMOOTH                         (2)
 #define  SGL_ARC_MODE_RING_SMOOTH                           (3)
-
 
 /**
  * @brief rect description
