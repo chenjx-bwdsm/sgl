@@ -309,7 +309,7 @@ void sgl_draw_string(sgl_surf_t *surf, sgl_area_t *area, int16_t x, int16_t y, c
         str += sgl_utf8_to_unicode(str, &unicode);
         ch_index = sgl_search_unicode_ch_index(font, unicode);
         sgl_draw_character(surf, area, x, y, ch_index, color, alpha, font);
-        x += (font->table[ch_index].adv_w >> 4);
+        x += ((font->table[ch_index].adv_w + 8)>> 4);
     }
 }
 
@@ -344,7 +344,7 @@ void sgl_draw_string_mult_line(sgl_surf_t *surf, sgl_area_t *area, int16_t x, in
         str += sgl_utf8_to_unicode(str, &unicode);
         ch_index = sgl_search_unicode_ch_index(font, unicode);
 
-        ch_width = (font->table[ch_index].adv_w >> 4);
+        ch_width = (font->table[ch_index].adv_w + 8) >> 4;
 
         if ((x_off + ch_width) > area->x2) {
             x_off = x;
@@ -431,6 +431,6 @@ void sgl_draw_string_mask(uint8_t *mask, sgl_area_t *area, int16_t x, int16_t y,
         str += sgl_utf8_to_unicode(str, &unicode);
         ch_index = sgl_search_unicode_ch_index(font, unicode);
         sgl_draw_label_mask(mask, area,x, y, ch_index, font);
-        x += (font->table[ch_index].adv_w >> 4);
+        x += ((font->table[ch_index].adv_w + 8)>> 4);
     }
 }

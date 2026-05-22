@@ -161,7 +161,7 @@ sgl_obj_t* sgl_label_create(sgl_obj_t* parent)
  * @param text pointer to the text
  * @return none
  */
-void sgl_label_set_text(sgl_obj_t *obj, char *text)
+void sgl_label_set_text(sgl_obj_t *obj, const char *text)
 {
     sgl_label_t *label = sgl_container_of(obj, sgl_label_t, obj);
     sgl_area_t area = SGL_AREA_INVALID, new_area = SGL_AREA_INVALID;
@@ -174,7 +174,7 @@ void sgl_label_set_text(sgl_obj_t *obj, char *text)
     else {
         sgl_label_update_area(label, text, &area);
     }
-    label->text = text;
+    label->text = (char*)text;
     sgl_obj_update_area(&area);
 }
 

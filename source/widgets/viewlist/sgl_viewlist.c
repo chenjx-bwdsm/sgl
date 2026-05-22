@@ -54,7 +54,8 @@ static void sgl_viewlist_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
         break;
 
     case SGL_EVENT_MOVE_UP:
-        if((viewlist->pos_y + viewlist->item_num * (viewlist->item_height + viewlist->margin_y)) >= (list_h - viewlist->item_height / 2)) {
+        if((viewlist->pos_y + viewlist->item_num * (viewlist->item_height + viewlist->margin_y) 
+                       - viewlist->margin_y) >= (list_h - viewlist->item_height / 2)) {
             viewlist->pos_y -= evt->distance;
             sgl_obj_for_each_child(child, obj) {
                 sgl_obj_set_pos_y(child, sgl_obj_get_pos_y(child) - evt->distance);
@@ -86,7 +87,7 @@ static void sgl_viewlist_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
             sgl_obj_set_dirty(obj);
         }
         else if((viewlist->pos_y + diff) < list_h) {
-            viewlist->pos_y = list_h - diff;
+            viewlist->pos_y = list_h - diff + viewlist->margin_y;
             pos_y = viewlist->pos_y - 2 * viewlist->margin_y + obj->border;
             sgl_obj_for_each_child(child, obj) {
                 sgl_obj_set_pos_y(child, pos_y);
@@ -220,6 +221,21 @@ void sgl_viewlist_set_item_height(sgl_obj_t *obj, uint16_t height)
 {
     sgl_viewlist_t *viewlist = sgl_container_of(obj, sgl_viewlist_t, obj);
     viewlist->item_height = height;
+    sgl_obj_set_dirty(obj);
+}
+
+/**
+ * @brief set the item margin of the viewlist
+ * @param obj viewlist object
+ * @param margin_x item margin x of the viewlist
+ * @param margin_y item margin y of the viewlist
+ * @return none
+ */
+void sgl_viewlist_set_item_margin(sgl_obj_t *obj, uint8_t margin_x, uint8_t margin_y)
+{
+    sgl_viewlist_t *viewlist = sgl_container_of(obj, sgl_viewlist_t, obj);
+    viewlist->margin_x = margin_x;
+    viewlist->margin_y = margin_y;
     sgl_obj_set_dirty(obj);
 }
 

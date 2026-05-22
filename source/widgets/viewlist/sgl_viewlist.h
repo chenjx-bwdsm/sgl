@@ -148,6 +148,15 @@ void sgl_viewlist_set_pixmap(sgl_obj_t *obj, const sgl_pixmap_t *pixmap);
 void sgl_viewlist_set_item_height(sgl_obj_t *obj, uint16_t height);
 
 /**
+ * @brief set the item margin of the viewlist
+ * @param obj viewlist object
+ * @param margin_x item margin x of the viewlist
+ * @param margin_y item margin y of the viewlist
+ * @return none
+ */
+void sgl_viewlist_set_item_margin(sgl_obj_t *obj, uint8_t margin_x, uint8_t margin_y);
+
+/**
  * @brief append an object to the viewlist
  * @param list viewlist object
  * @param obj object to be added
