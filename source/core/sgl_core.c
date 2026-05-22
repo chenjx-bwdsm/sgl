@@ -1324,7 +1324,7 @@ int32_t sgl_font_get_string_width(const char *str, const sgl_font_t *font)
     while (*str) {
         str += sgl_utf8_to_unicode(str, &unicode);
         ch_index = sgl_search_unicode_ch_index(font, unicode);
-        len += (font->table[ch_index].adv_w >> 4);
+        len += ((font->table[ch_index].adv_w + 8)>> 4);
     }
     return len;
 }
@@ -1357,7 +1357,7 @@ int32_t sgl_font_get_string_height(int16_t width, const char *str, const sgl_fon
         str += sgl_utf8_to_unicode(str, &unicode);
         ch_index = sgl_search_unicode_ch_index(font, unicode);
 
-        ch_width = (font->table[ch_index].adv_w >> 4);
+        ch_width = ((font->table[ch_index].adv_w + 8)>> 4);
 
         if ((offset_x + ch_width) >= width) {
             offset_x = 0;
