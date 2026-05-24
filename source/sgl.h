@@ -66,6 +66,7 @@
 #include "widgets/qrcode/sgl_qrcode.h"
 #include "widgets/spectrum/sgl_spectrum.h"
 #include "widgets/battery/sgl_battery.h"
+#include "widgets/gauge/sgl_gauge.h"
 #include "components/timer/sgl_timer.h"
 
 #endif // __SGL_H__

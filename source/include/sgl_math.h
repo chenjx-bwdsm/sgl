@@ -69,6 +69,24 @@ extern "C" {
 #define SGL_SIN_FIXED_ONE                 (32768)
 #define SGL_COS_FIXED_ONE                 (32768)
 
+
+/**
+ * @brief Normalize an angle to the range of 0 to 360 degrees.
+ * @param angle: Angle in degrees such 0-359
+ * @return Angle in degrees such 0-359
+ */
+static inline int16_t sgl_mod360(int16_t angle)
+{
+    while (angle >= 360) {
+        angle -= 360;
+    }
+    while (angle < 0) {
+        angle += 360;
+    }
+    return angle;
+}
+
+
 /**
  * @brief Calculate the sine of an angle
  * @param angle: Angle in degrees such 0-359

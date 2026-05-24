@@ -1994,8 +1994,7 @@ uint32_t sgl_search_unicode_ch_index(const sgl_font_t *font, uint32_t unicode);
  */
 static inline int16_t sgl_font_get_height(const sgl_font_t *font)
 {
-    SGL_ASSERT(font != NULL);
-    return font->font_height;
+    return font != NULL ? font->font_height : 0;
 }
 
 

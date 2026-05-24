@@ -59,4 +59,5 @@ set(SGL_SOURCE
     ${CMAKE_CURRENT_LIST_DIR}/qrcode/qrcode.c
     ${CMAKE_CURRENT_LIST_DIR}/qrcode/sgl_qrcode.c
     ${CMAKE_CURRENT_LIST_DIR}/spectrum/sgl_spectrum.c
+    ${CMAKE_CURRENT_LIST_DIR}/gauge/sgl_gauge.c
 )
