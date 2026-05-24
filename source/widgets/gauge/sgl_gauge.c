@@ -40,7 +40,7 @@ void gauge_update_value(sgl_gauge_t *gauge, int16_t value)
     const int16_t r = sgl_max(gauge->obj.radius, sgl_obj_get_width(&gauge->obj) / 2 - 1);
     const int16_t scale_in = gauge->arc_width + 6 + sgl_max(gauge->scale_length, 4);
     const int16_t hub_r = sgl_max((r + 8) / 8, gauge->hub_r);
-    const int16_t pointer_s = scale_in + 6, pointer_e = r - hub_r - gauge->pointer_width;
+    const int16_t pointer_s = scale_in + 4 + gauge->pointer_width, pointer_e = r - hub_r - gauge->pointer_width;
 
     int needle_angle_deg = sgl_mod360(90 + gauge->angle_start + gauge->value * gauge->scale_angle / gauge->scale_step);
     int32_t n_sin = sgl_sin(needle_angle_deg);
@@ -92,7 +92,7 @@ static void sgl_gauge_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t
     const int16_t scale_out = gauge->arc_width + 6;
     const int16_t scale_in = scale_out + scale_len;
     const int16_t text_cr = r - scale_in - (sgl_font_get_height(gauge->font) / 2) - 4;
-    const int16_t pointer_s = scale_in + 6, pointer_e = r - hub_r - gauge->pointer_width;
+    const int16_t pointer_s = scale_in + 4 + gauge->pointer_width, pointer_e = r - hub_r - gauge->pointer_width;
     int16_t scale_mask = gauge->scale_start, txt_x, txt_y;
     uint16_t count = 0;
     char text[16];
