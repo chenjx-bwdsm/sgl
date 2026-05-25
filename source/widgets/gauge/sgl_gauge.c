@@ -134,10 +134,10 @@ static void sgl_gauge_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t
             sgl_sprintf(text, "%d", scale_mask);
             text_len = sgl_font_get_string_width(text, gauge->font);
 
-            if ((count & 0x3) == 0) {
+            if ((count & gauge->text_interval) == 0) {
                 int32_t tx = (text_cr * cos_val) / SGL_SIN_FIXED_ONE + cx;
                 int32_t ty = (text_cr * sin_val) / SGL_SIN_FIXED_ONE + cy;
-                txt_x = tx - (text_len) / 2 - 1;
+                txt_x = tx - (text_len) / 2 - 2;
                 txt_y = ty - (sgl_font_get_height(gauge->font) / 2);
 
                 draw_line_fill_slanted(surf, &obj->area, x_out, y_out, x_in, y_in, gauge->scale_width * 2, scale_color, gauge->alpha);
@@ -199,6 +199,7 @@ sgl_obj_t* sgl_gauge_create(sgl_obj_t* parent)
     gauge->scale_warning = INT16_MAX;
     gauge->value = 0;
     gauge->arc_width = 2;
+    gauge->text_interval = 0x3;
     gauge->font = sgl_get_system_font();
 
     return obj;
@@ -449,6 +450,19 @@ void sgl_gauge_set_scale_step_value(sgl_obj_t *obj, uint16_t value)
 {
     sgl_gauge_t *gauge = sgl_container_of(obj, sgl_gauge_t, obj);
     gauge->scale_step = value;
+    sgl_obj_set_dirty(obj);
+}
+
+/**
+ * @brief set gauge text interval
+ * @param obj gauge object
+ * @param interval gauge text interval
+ * @return none
+ */
+void sgl_gauge_set_text_interval(sgl_obj_t *obj, uint8_t interval)
+{
+    sgl_gauge_t *gauge = sgl_container_of(obj, sgl_gauge_t, obj);
+    gauge->text_interval = interval;
     sgl_obj_set_dirty(obj);
 }
 

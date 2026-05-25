@@ -33,6 +33,10 @@
 #include <sgl_cfgfix.h>
 #include <string.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief sgl gauge widget, How to use, For example:
  *   sgl_obj_t *gauge = sgl_gauge_create(NULL);
@@ -49,7 +53,8 @@ typedef struct sgl_gauge {
     sgl_obj_t  obj;
     int16_t    scale_start;
     uint16_t   scale_step;
-    int16_t    scale_angle;
+    uint8_t    scale_angle;
+    uint8_t    text_interval;
     int16_t    angle_start;
     int16_t    angle_end;
     sgl_color_t bg_color;
@@ -229,11 +234,23 @@ void sgl_gauge_set_scale_start_value(sgl_obj_t *obj, int16_t value);
 void sgl_gauge_set_scale_step_value(sgl_obj_t *obj, uint16_t value);
 
 /**
+ * @brief set gauge text interval
+ * @param obj gauge object
+ * @param interval gauge text interval
+ * @return none
+ */
+void sgl_gauge_set_text_interval(sgl_obj_t *obj, uint8_t interval);
+
+/**
  * @brief set gauge alpha
  * @param obj gauge object
  * @param alpha gauge alpha
  * @return none
  */
 void sgl_gauge_set_alpha(sgl_obj_t *obj, uint8_t alpha);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // !__SGL_GAUGE_H__

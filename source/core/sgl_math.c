@@ -130,13 +130,7 @@ int32_t sgl_sin(int16_t angle)
 {
     int16_t ret = 0;
 
-    while (angle >= 360) {
-        angle -= 360;
-    }
-    while (angle < 0) {
-        angle += 360;
-    }
-
+    angle = sgl_mod360(angle);
     if (angle < 0) {
         angle = 360 + angle;
     }

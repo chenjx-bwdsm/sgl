@@ -39,6 +39,9 @@
 #define SGL_SPECTRUM_MODE_BAR_HAT                  (SGL_SPECTRUM_MODE_HAT_FLAG | SGL_SPECTRUM_MODE_BAR)
 #define SGL_SPECTRUM_MODE_BLOCK_HAT                (SGL_SPECTRUM_MODE_HAT_FLAG | SGL_SPECTRUM_MODE_BLOCK)
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * @brief sgl spectrum struct
@@ -125,5 +128,9 @@ void sgl_spectrum_set_bar_hat_height(sgl_obj_t *obj, uint8_t height);
  * @return none
  */
 void sgl_spectrum_set_alpha(sgl_obj_t *obj, uint8_t alpha);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // !__SGL_SPECTRUM_H__
