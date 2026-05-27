@@ -140,7 +140,7 @@ static void sgl_gauge_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t
                 txt_x = tx - (text_len) / 2 - 2;
                 txt_y = ty - (sgl_font_get_height(gauge->font) / 2);
 
-                if ((angle + gauge->angle_start) != 360) {
+                if ((angle - gauge->angle_start) < 360) {
                     draw_line_fill_slanted(surf, &obj->area, x_out, y_out, x_in, y_in, gauge->scale_width * 2, scale_color, gauge->alpha);
                     sgl_draw_string(surf, &obj->area, txt_x, txt_y, text, gauge->text_color, gauge->alpha, gauge->font);
                 }
