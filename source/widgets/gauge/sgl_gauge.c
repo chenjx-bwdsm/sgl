@@ -32,54 +32,48 @@
 #include <string.h>
 #include "sgl_gauge.h"
 
-void gauge_update_value(sgl_gauge_t *gauge, int16_t value)
+static void gauge_calc_needle_area(const sgl_gauge_t *gauge, int16_t cx, int16_t cy, int16_t r,
+                                   int16_t pointer_s, int16_t pointer_e, sgl_area_t *area)
 {
-    sgl_area_t area, new_area;
-    const int16_t cx = (gauge->obj.coords.x1 + gauge->obj.coords.x2) / 2;
-    const int16_t cy = (gauge->obj.coords.y1 + gauge->obj.coords.y2) / 2;
-    const int16_t r = sgl_max(gauge->obj.radius, sgl_obj_get_width(&gauge->obj) / 2 - 1);
-    const int16_t scale_in = gauge->arc_width + 6 + sgl_max(gauge->scale_length, 4);
-    const int16_t hub_r = sgl_max((r + 8) / 8, gauge->hub_r);
-    const int16_t pointer_s = scale_in + 4 + gauge->pointer_width, pointer_e = r - hub_r - gauge->pointer_width;
-
     int needle_angle_deg = sgl_mod360(90 + gauge->angle_start + gauge->value * gauge->scale_angle / gauge->scale_step);
     int32_t n_sin = sgl_sin(needle_angle_deg);
-    int32_t n_cos = sgl_sin(needle_angle_deg + 90);
+    int32_t n_cos = sgl_cos(needle_angle_deg);
 
     int32_t px_needle = ((r - pointer_s) * n_cos) / SGL_SIN_FIXED_ONE + cx;
     int32_t py_needle = ((r - pointer_s) * n_sin) / SGL_SIN_FIXED_ONE + cy;
     int32_t nx_needle = ((r - pointer_e) * n_cos) / SGL_SIN_FIXED_ONE + cx;
     int32_t ny_needle = ((r - pointer_e) * n_sin) / SGL_SIN_FIXED_ONE + cy;
 
-    area.x1 = sgl_min(px_needle, nx_needle);
-    area.x2 = sgl_max(px_needle, nx_needle);
-    area.y1 = sgl_min(py_needle, ny_needle);
-    area.y2 = sgl_max(py_needle, ny_needle);
+    area->x1 = sgl_min(px_needle, nx_needle);
+    area->x2 = sgl_max(px_needle, nx_needle);
+    area->y1 = sgl_min(py_needle, ny_needle);
+    area->y2 = sgl_max(py_needle, ny_needle);
+}
 
+void gauge_update_value(sgl_gauge_t *gauge, int16_t value)
+{
+    const int16_t cx = (gauge->obj.coords.x1 + gauge->obj.coords.x2) / 2;
+    const int16_t cy = (gauge->obj.coords.y1 + gauge->obj.coords.y2) / 2;
+    const int16_t r = sgl_max(gauge->obj.radius, sgl_obj_get_width(&gauge->obj) / 2 - 1);
+    const int16_t scale_in = gauge->arc_width + 6 + sgl_max(gauge->scale_length, 4);
+    const int16_t hub_r = sgl_max((r + 8) / 8, gauge->hub_r);
+    const int16_t pointer_s = scale_in + 4 + gauge->pointer_width;
+    const int16_t pointer_e = r - hub_r - gauge->pointer_width;
+    sgl_area_t area;
+
+    gauge_calc_needle_area(gauge, cx, cy, r, pointer_s, pointer_e, &area);
     gauge->value = value;
 
-    needle_angle_deg = sgl_mod360(90 + gauge->angle_start + gauge->value * gauge->scale_angle / gauge->scale_step);
-    n_sin = sgl_sin(needle_angle_deg);
-    n_cos = sgl_cos(needle_angle_deg);
-
-    px_needle = ((r - pointer_s) * n_cos) / SGL_SIN_FIXED_ONE + cx;
-    py_needle = ((r - pointer_s) * n_sin) / SGL_SIN_FIXED_ONE + cy;
-    nx_needle = ((r - pointer_e) * n_cos) / SGL_SIN_FIXED_ONE + cx;
-    ny_needle = ((r - pointer_e) * n_sin) / SGL_SIN_FIXED_ONE + cy;
-
-    new_area.x1 = sgl_min(px_needle, nx_needle);
-    new_area.x2 = sgl_max(px_needle, nx_needle);
-    new_area.y1 = sgl_min(py_needle, ny_needle);
-    new_area.y2 = sgl_max(py_needle, ny_needle);
-
+    sgl_area_t new_area;
+    gauge_calc_needle_area(gauge, cx, cy, r, pointer_s, pointer_e, &new_area);
     sgl_area_selfmerge(&area, &new_area);
+
     area.x1 -= gauge->pointer_width;
     area.x2 += gauge->pointer_width;
     area.y1 -= gauge->pointer_width;
     area.y2 += gauge->pointer_width;
     sgl_update_area(&area);
 }
-
 
 static void sgl_gauge_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t *evt)
 {
