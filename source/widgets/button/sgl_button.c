@@ -62,7 +62,8 @@ static void sgl_button_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_
         if(button->text) {
             SGL_ASSERT(button->font != NULL);
             align_pos = sgl_get_text_pos(&obj->coords, button->font, button->text, 0, (sgl_align_type_t)button->align);
-            text_color = sgl_obj_is_clickable(obj) ? button->text_color : sgl_color_mixer(button->text_color, button->color, SGL_ALPHA_UNCLICKABLE);
+            text_color = sgl_obj_is_clickable(obj) ? button->text_color : 
+                                                     sgl_color_mixer(button->text_color, button->color, SGL_ALPHA_UNCLICKABLE);
             sgl_draw_string(surf, &obj->area, align_pos.x, align_pos.y, button->text, text_color, button->alpha, button->font);
         }
     }

@@ -84,21 +84,18 @@ extern "C" {
 #define SGL_HEIGHT_MAX                          (8192)
 #define SGL_HEIGHT_MIN                          (0)
 
-
 #define SGL_DIRECT_HORIZONTAL                   (0)
 #define SGL_DIRECT_VERTICAL                     (1)
-
 
 #define SGL_ALPHA_MAX                           (255)
 #define SGL_ALPHA_MIN                           (0)
 #define SGL_ALPHA_NUM                           (256)
 #define SGL_ALPHA_PRCNT(x)                      ((x) * SGL_ALPHA_MAX / 100)
-
+#define SGL_ALPHA_UNCLICKABLE                   (64)
 
 #define SGL_STYLE_OK                            (0)
 #define SGL_STYLE_FAILED                        (UINT32_MAX)
 #define SGL_STYLE_INVALID                       (UINT32_MAX)
-
 
 #define SGL_COLOR_RGB332                        (8)
 #define SGL_COLOR_RGB565                        (16)
