@@ -37,6 +37,7 @@ static void sgl_led_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t *
 {
     sgl_led_t *led = sgl_container_of(obj, sgl_led_t, obj);
     int16_t cx = 0, cy = 0;
+    const int16_t radius = sgl_max(sgl_obj_get_width(obj) / 2, obj->radius);
     sgl_color_t color = led->status ? led->on_color : led->off_color;
 
     if(evt->type == SGL_EVENT_DRAW_MAIN) {
@@ -50,7 +51,7 @@ static void sgl_led_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t *
         int cx2 = 2 * cx + 1;
         int cy2 = 2 * cy + 1;
         int dx2 = 0, dy2 = 0;
-        const int diameter = obj->radius << 1;
+        const int diameter = radius << 1;
         const int r2_max = sgl_pow2(diameter);
         const int r2 = sgl_max(sgl_pow2(diameter - 6), 0); 
         const int r2_fix_diff = (SGL_ALPHA_MAX  << SGL_FIXED_SHIFT) / sgl_max(r2_max - r2, 1);
