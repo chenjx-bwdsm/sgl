@@ -241,6 +241,18 @@ void sgl_checkbox_set_font(sgl_obj_t *obj, const sgl_font_t *font)
 }
 
 /**
+ * @brief set checkbox radius
+ * @param obj checkbox object
+ * @param radius radius of checkbox
+ * @return none
+ */
+void sgl_checkbox_set_radius(sgl_obj_t *obj, int16_t radius)
+{
+    sgl_obj_set_radius(obj, radius);
+    sgl_obj_set_dirty(obj);
+}
+
+/**
  * @brief set checkbox status
  * @param obj checkbox object
  * @param status status of checkbox
