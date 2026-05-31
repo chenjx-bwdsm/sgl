@@ -769,12 +769,14 @@ void sgl_event_key_right(void)
 void sgl_event_key_enter_pressed(void)
 {
     sgl_event_t evt;
+    sgl_event_type_t type;
     if (!key_ctx.focused || !key_ctx.grp_head) {
         return;
     }
 
     if (!sgl_obj_is_editable(key_ctx.focused)) {
-        event_type_callback(key_ctx.focused, &evt, SGL_EVENT_PRESSED);
+        type = sgl_obj_is_keypress_mask(key_ctx.focused) ? SGL_EVENT_CLICKED : SGL_EVENT_PRESSED;
+        event_type_callback(key_ctx.focused, &evt, type);
         key_ctx.pressed = true;
     }
     else {

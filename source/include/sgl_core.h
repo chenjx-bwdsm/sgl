@@ -416,8 +416,9 @@ typedef struct sgl_obj {
     uint8_t         border;
     uint16_t        flexible : 1;
     uint16_t        pressed : 1;
+    uint16_t        press_mask : 1;
     uint16_t        page : 1;
-    uint16_t        radius : 13;
+    uint16_t        radius : 12;
 #if CONFIG_SGL_OBJ_USE_NAME
     const char      *name;
 #endif
@@ -1205,6 +1206,28 @@ static inline bool sgl_obj_is_clickable(sgl_obj_t *obj)
 {
     SGL_ASSERT(obj != NULL);
     return (bool)obj->clickable;
+}
+
+/**
+ * @brief set object to mask key press event
+ * @param obj point to object
+ * @note
+*/
+static inline void sgl_obj_set_keypress_mask(sgl_obj_t *obj)
+{
+    SGL_ASSERT(obj != NULL);
+    obj->press_mask = 1;
+}
+
+/**
+ * @brief check object key press mask status
+ * @param obj point to object
+ * @return true: press mask, false: unpress mask
+ */
+static inline bool sgl_obj_is_keypress_mask(sgl_obj_t *obj)
+{
+    SGL_ASSERT(obj != NULL);
+    return obj->press_mask;
 }
 
 /**

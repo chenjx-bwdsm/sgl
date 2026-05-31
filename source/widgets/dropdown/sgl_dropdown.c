@@ -184,7 +184,6 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
         }
     break;
 
-    case SGL_EVENT_KEY_ENTER:
     case SGL_EVENT_CLICKED:
         if (dropdown->is_open) {
             dropdown->is_open = false;
@@ -247,6 +246,7 @@ sgl_obj_t* sgl_dropdown_create(sgl_obj_t* parent)
     sgl_obj_set_border_width(obj, 1);
     sgl_obj_set_clickable(obj);
     sgl_obj_set_movable(obj);
+    sgl_obj_set_keypress_mask(obj);
 
     dropdown->alpha = SGL_THEME_ALPHA;
     dropdown->bg_color = SGL_THEME_COLOR;
