@@ -48,8 +48,8 @@ void sgl_draw_wireframe(sgl_surf_t *surf, sgl_area_t *area, sgl_area_t *rect, in
     if (radius == 0) {
         sgl_draw_fill_hline(surf, area, y1, x1, x2, width, color, alpha);
         sgl_draw_fill_hline(surf, area, y2, x1, x2, width, color, alpha);
-        sgl_draw_fill_vline(surf, area, x1, y1 + width, y2 - width, width, color, alpha);
-        sgl_draw_fill_vline(surf, area, x2, y1 + width, y2 - width, width, color, alpha);
+        sgl_draw_fill_vline(surf, area, x1, y1 + width - 1, y2 - width + 1, width, color, alpha);
+        sgl_draw_fill_vline(surf, area, x2, y1 + width - 1, y2 - width + 1, width, color, alpha);
     }
     else {
         sgl_draw_fill_rect_with_border(surf, area, rect, radius, SGL_COLOR_BLACK, color, width, 0, alpha);
