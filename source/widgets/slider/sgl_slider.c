@@ -42,7 +42,8 @@ static void sgl_slider_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_
     sgl_rect_t bar;
     sgl_area_t desc_area = obj->area;
 
-    if(evt->type == SGL_EVENT_DRAW_MAIN) {
+    switch (evt->type) {
+    case SGL_EVENT_DRAW_MAIN:
         if(slider->direct == SGL_DIRECT_HORIZONTAL) {
             knob_r = h / 2 - 1;
             thickness = sgl_min(slider->thickness, knob_r);
@@ -81,10 +82,13 @@ static void sgl_slider_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_
             sgl_draw_fill_rect(surf, &desc_area, &bar, radius, slider->track_color, SGL_ALPHA_MAX);
             sgl_draw_fill_circle(surf, &obj->area, sgl_mid(bar.x1, bar.x2), fill_pos, knob_r, slider->knob_color, SGL_ALPHA_MAX);
         }
-    }
-    else if(evt->type == SGL_EVENT_PRESSED ||
-        evt->type == SGL_EVENT_MOVE_DOWN || evt->type == SGL_EVENT_MOVE_UP || evt->type == SGL_EVENT_MOVE_LEFT || evt->type == SGL_EVENT_MOVE_RIGHT
-    ) {
+        break;
+    
+    case SGL_EVENT_PRESSED:
+    case SGL_EVENT_MOVE_DOWN:
+    case SGL_EVENT_MOVE_UP:
+    case SGL_EVENT_MOVE_LEFT:
+    case SGL_EVENT_MOVE_RIGHT:
         if(slider->direct == SGL_DIRECT_HORIZONTAL) {
             slider->value = sgl_clamp((evt->pos.x - obj->coords.x1) * 100 / (obj->coords.x2 - obj->coords.x1), 0, 100);
         }
@@ -96,10 +100,22 @@ static void sgl_slider_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_
             sgl_obj_size_zoom(obj, 2);
         }
         sgl_obj_set_dirty(obj);
-    }
-    else if(evt->type == SGL_EVENT_RELEASED) {
+        break;
+    
+    case SGL_EVENT_RELEASED:
         sgl_obj_size_zoom(obj, -2);
         sgl_obj_set_dirty(obj);
+        break;
+
+    case SGL_EVENT_KEY_LEFT:
+        slider->value = sgl_clamp(slider->value - 1, 0, 100);
+        sgl_obj_set_dirty(obj);
+        break;
+
+    case SGL_EVENT_KEY_RIGHT:
+        slider->value = sgl_clamp(slider->value + 1, 0, 100);
+        sgl_obj_set_dirty(obj);
+        break;
     }
 }
 
@@ -126,6 +142,7 @@ sgl_obj_t* sgl_slider_create(sgl_obj_t* parent)
     sgl_obj_set_movable(obj);
     obj->construct_fn = sgl_slider_construct_cb;
     sgl_obj_set_border_width(obj, SGL_THEME_BORDER_WIDTH);
+    sgl_obj_set_editable(obj);
 
     slider->direct = SGL_DIRECT_HORIZONTAL;
     slider->track_color = sgl_color_mixer(SGL_THEME_COLOR, SGL_THEME_BG_COLOR, 128);
