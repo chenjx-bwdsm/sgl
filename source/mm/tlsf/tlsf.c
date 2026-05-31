@@ -263,7 +263,7 @@ enum tlsf_private
 #if CONFIG_SGL_DEBUG
 #define tlsf_assert SGL_ASSERT
 #else
-#define tlsf_assert
+#define tlsf_assert (void)
 #endif
 
 /*
@@ -899,6 +899,9 @@ int tlsf_check(tlsf_t tlsf)
 static void default_walker(void* ptr, size_t size, int used, void* user)
 {
 	(void)user;
+	(void)ptr;
+	(void)size;
+	(void)(used);
 	SGL_LOG_INFO("\t%p %s size: %x (%p)\n", ptr, used ? "used" : "free", (unsigned int)size, block_from_ptr(ptr));
 }
 

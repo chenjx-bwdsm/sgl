@@ -521,6 +521,10 @@ static void sgl_keyboard_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
         SGL_ASSERT(keyboard->font != NULL);
         break;
 
+    case SGL_EVENT_KEY_ESC:
+        keyboard->key_index = KEYBOARD_KEY_INVALID;
+        sgl_obj_update_area(&keyboard->btn_area);
+        break;
     default:
         break;
     }
