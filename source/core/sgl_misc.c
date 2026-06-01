@@ -349,7 +349,6 @@ void sgl_monitor_trace(sgl_surf_t *surf)
 
             sgl_snprintf(fps_str, sizeof(fps_str), "FPS:%d", fps_count);
             sgl_snprintf(mem_str, sizeof(mem_str), "MEM:%d.%d%", sgl_mm_get_monitor().used_rate >> 8, sgl_mm_get_monitor().used_rate & 0xff);
-            last_tick = cur_tick;
         }
 
 #if (CONFIG_SGL_FBDEV_RUNTIME_ROTATION)
