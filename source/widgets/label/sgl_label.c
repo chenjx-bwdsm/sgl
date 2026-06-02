@@ -166,14 +166,9 @@ void sgl_label_set_text(sgl_obj_t *obj, const char *text)
     sgl_label_t *label = sgl_container_of(obj, sgl_label_t, obj);
     sgl_area_t area = SGL_AREA_INVALID, new_area = SGL_AREA_INVALID;
 
-    if ((label != NULL) && (strlen(label->text) != strlen(text))) {
-        sgl_label_update_area(label, label->text, &area);
-        sgl_label_update_area(label, text, &new_area);
-        sgl_area_selfmerge(&area, &new_area);
-    }
-    else {
-        sgl_label_update_area(label, text, &area);
-    }
+    sgl_label_update_area(label, label->text, &area);
+    sgl_label_update_area(label, text, &new_area);
+    sgl_area_selfmerge(&area, &new_area);
     label->text = (char*)text;
     sgl_obj_update_area(&area);
 }
