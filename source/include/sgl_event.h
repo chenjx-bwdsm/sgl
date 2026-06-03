@@ -96,6 +96,24 @@ typedef struct sgl_event {
 } sgl_event_t;
 
 /**
+ * @brief key group struct
+ * @count: The number of keys in the group
+ * @pressed: Whether the key group is pressed
+ * @editing: Whether the key group is editing
+ * @focused: The focused of the key group
+ * @obj_size: The size of the object
+ * @obj: The object of the key group
+ */
+typedef struct sgl_key_group {
+    uint16_t         count;
+    bool             pressed;
+    bool             editing;
+    int16_t          focused;
+    uint16_t         obj_size;
+    struct sgl_obj   *obj[];
+} sgl_key_group_t;
+
+/**
  * @brief Get the target object of the event
  * @param event The event to be handled
  * @return The target object of the event
@@ -257,20 +275,43 @@ void sgl_event_task(void);
 void sgl_event_pos_input(int16_t x, int16_t y, bool flag);
 
 /**
- * @brief Add object to key group
- * @param obj The object to add
- * @return none
- * @warning you should check the return value of sgl_event_key_add_group
+ * @brief create a key group
+ * @param max_num The maximum number of objects in the group
+ * @return The pointer to the key group
+ * @note: you must check the return value before using the key group
  */
-void sgl_event_key_add_group(struct sgl_obj *obj);
+sgl_key_group_t* sgl_key_group_create(uint16_t max_num);
 
 /**
- * @brief Remove object from key group
+ * @brief Delete a key group
+ * @param grp The pointer to the key group
+ * @return none
+ */
+void sgl_key_group_delete(sgl_key_group_t *group);
+
+/**
+ * @brief Add an object to the key group
+ * @param group The pointer to the key group
+ * @param obj The object to add
+ * @return none
+ */
+void sgl_key_group_add_obj(sgl_key_group_t *group, struct sgl_obj *obj);
+
+/**
+ * @brief Remove an object from the key group
+ * @param group The pointer to the key group
  * @param obj The object to remove
  * @return none
- * @note if obj is NULL, remove all key group
  */
-void sgl_event_key_remove_group(struct sgl_obj *obj);
+void sgl_key_group_remove_obj(sgl_key_group_t *group, struct sgl_obj *obj);
+
+/**
+ * @brief Navigate to next/prev focus
+ * @param type The event type
+ * @param forward The direction of navigation
+ * @return none
+ */
+void sgl_key_navigate(sgl_event_type_t type, bool forward);
 
 /**
  * @brief Physical keyboard event UP
@@ -278,7 +319,10 @@ void sgl_event_key_remove_group(struct sgl_obj *obj);
  * @return none
  * @note: you can call it in physical keyboard event handler function
  */
-void sgl_event_key_up(void);
+static inline void sgl_key_up(void)
+{
+    sgl_key_navigate(SGL_EVENT_KEY_UP, false);
+}
 
 /**
  * @brief Physical keyboard event DOWN
@@ -286,7 +330,10 @@ void sgl_event_key_up(void);
  * @return none
  * @note: you can call it in physical keyboard event handler function
  */
-void sgl_event_key_down(void);
+static inline void sgl_key_down(void)
+{
+    sgl_key_navigate(SGL_EVENT_KEY_DOWN, true);
+}
 
 /**
  * @brief Physical keyboard event LEFT
@@ -294,7 +341,10 @@ void sgl_event_key_down(void);
  * @return none
  * @note: you can call it in physical keyboard event handler function
  */
-void sgl_event_key_left(void);
+static inline void sgl_key_left(void)
+{
+    sgl_key_navigate(SGL_EVENT_KEY_LEFT, false);
+}
 
 /**
  * @brief Physical keyboard event RIGHT
@@ -302,7 +352,10 @@ void sgl_event_key_left(void);
  * @return none
  * @note: you can call it in physical keyboard event handler function
  */
-void sgl_event_key_right(void);
+static inline void sgl_key_right(void)
+{
+    sgl_key_navigate(SGL_EVENT_KEY_RIGHT, true);
+}
 
 /**
  * @brief Physical keyboard event ENTER pressed
@@ -310,7 +363,7 @@ void sgl_event_key_right(void);
  * @return none
  * @note: you can call it in physical keyboard event handler function
  */
-void sgl_event_key_enter_pressed(void);
+void sgl_key_enter_pressed(void);
 
 /**
  * @brief Physical keyboard event ENTER released
@@ -318,7 +371,7 @@ void sgl_event_key_enter_pressed(void);
  * @return none
  * @note: you can call it in physical keyboard event handler function
  */
-void sgl_event_key_enter_released(void);
+void sgl_key_enter_released(void);
 
 /**
  * @brief Physical keyboard event ESC
@@ -326,7 +379,7 @@ void sgl_event_key_enter_released(void);
  * @return none
  * @note: you can call it in physical keyboard event handler function
  */
-void sgl_event_key_esc(void);
+void sgl_key_esc(void);
 
 /**
  * @brief Send signal to key event
@@ -334,7 +387,7 @@ void sgl_event_key_esc(void);
  * @param signal The signal to send
  * @return none
  */
-static inline void sgl_event_key_send_signal(sgl_event_t *evt, sgl_event_type_t signal)
+static inline void sgl_key_send_signal(sgl_event_t *evt, sgl_event_type_t signal)
 {
     evt->type = signal;
 }
@@ -344,7 +397,7 @@ static inline void sgl_event_key_send_signal(sgl_event_t *evt, sgl_event_type_t 
  * @param evt The event to get signal
  * @return The signal of the event
  */
-static inline sgl_event_type_t sgl_event_key_get_signal(sgl_event_t *evt)
+static inline sgl_event_type_t sgl_key_get_signal(sgl_event_t *evt)
 {
     return evt->type;
 }

@@ -166,7 +166,7 @@ static void sgl_msgbox_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_
         }
         else if (evt->pos.x == SGL_POS_MIN && evt->pos.y == SGL_POS_MIN) {
             msgbox->status |= SGL_MSGBOX_STATUS_EXIT;
-            sgl_event_key_send_signal(evt, SGL_EVENT_DESTROYED);
+            sgl_key_send_signal(evt, SGL_EVENT_DESTROYED);
             sgl_obj_set_destroyed(obj);
         }
         else {
