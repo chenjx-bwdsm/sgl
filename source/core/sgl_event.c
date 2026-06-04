@@ -761,7 +761,7 @@ void sgl_key_navigate(sgl_event_type_t type, bool forward)
  */
 void sgl_key_enter_pressed(void)
 {
-    if (!sgl_key_ensure_focus()) return;
+    if (!grp_active_is_focused()) return;
 
     sgl_obj_t *obj = grp_active_get_focused();
     if (!sgl_obj_is_editable(obj)) {
@@ -790,7 +790,7 @@ void sgl_key_enter_pressed(void)
  */
 void sgl_key_enter_released(void)
 {
-    if (!sgl_key_ensure_focus()) return;
+    if (!grp_active_is_focused()) return;
 
     if (grp_active_is_pressed()) {
         sgl_event_t evt;
@@ -811,7 +811,7 @@ void sgl_key_enter_released(void)
  */
 void sgl_key_esc(void)
 {
-    if (!sgl_key_ensure_focus()) return;
+    if (!grp_active_is_focused()) return;
 
     if (grp_active_is_editing()) {
         sgl_event_t evt;
