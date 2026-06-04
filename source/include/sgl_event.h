@@ -101,15 +101,13 @@ typedef struct sgl_event {
  * @pressed: Whether the key group is pressed
  * @editing: Whether the key group is editing
  * @focused: The focused of the key group
- * @obj_size: The size of the object
  * @obj: The object of the key group
  */
 typedef struct sgl_key_group {
-    uint16_t         count;
-    bool             pressed;
-    bool             editing;
+    uint16_t         count : 14;
+    uint16_t         pressed : 1;
+    uint16_t         editing : 1;
     int16_t          focused;
-    uint16_t         obj_size;
     struct sgl_obj   *obj[];
 } sgl_key_group_t;
 
@@ -293,17 +291,17 @@ void sgl_key_group_delete(sgl_key_group_t *group);
  * @brief Add an object to the key group
  * @param group The pointer to the key group
  * @param obj The object to add
- * @return none
+ * @return > 0 : success, -1 : failed
  */
-void sgl_key_group_add_obj(sgl_key_group_t *group, struct sgl_obj *obj);
+int sgl_key_group_add_obj(sgl_key_group_t *group, struct sgl_obj *obj);
 
 /**
  * @brief Remove an object from the key group
  * @param group The pointer to the key group
  * @param obj The object to remove
- * @return none
+ * @return > 0 : success, -1 : failed
  */
-void sgl_key_group_remove_obj(sgl_key_group_t *group, struct sgl_obj *obj);
+int sgl_key_group_remove_obj(sgl_key_group_t *group, struct sgl_obj *obj);
 
 /**
  * @brief Load a key group

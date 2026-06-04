@@ -547,49 +547,55 @@ static void event_type_callback(struct sgl_obj *obj, sgl_event_t *evt, sgl_event
 }
 
 /**
- * @brief Get the previous focused index of the key group
- * @param none
- * @return the previous focused index of the key group
+ * @brief get the prev/next focused object in the key group
+ * @param forward: true: get next focused object, false: get prev focused object
+ * @return The index of the next/prev focused object
  */
-static int16_t grp_active_get_focused_prev(void)
+static int16_t grp_active_get_focused_neighbor(bool forward)
 {
-    int ret = key_grp_active->focused;
-    if (ret == 0) {
-        ret = key_grp_active->count - 1;
-    } else {
-        ret --;
+    if (!key_grp_active || key_grp_active->count == 0) {
+        return -1;
     }
 
-    for (int i = 0; i < key_grp_active->count; i++) {
-        if (key_grp_active->obj[ret] != NULL) {
-            return ret;
-        }
-        ret --;
+    uint16_t count = key_grp_active->count;
+    int16_t  cur   = key_grp_active->focused;
+    uint16_t idx;
+
+    if (cur < 0 || cur >= (int16_t)count) {
+        idx = forward ? 0 : (count - 1);
     }
+    else {
+        idx = forward ? (uint16_t)((cur + 1) % count)
+                      : (uint16_t)((cur == 0) ? (count - 1) : (cur - 1));
+    }
+
+    for (uint16_t i = 0; i < count; i++) {
+        if (key_grp_active->obj[idx] != NULL) {
+            return (int16_t)idx;
+        }
+        idx = forward ? (uint16_t)((idx + 1) % count)
+                      : (uint16_t)((idx == 0) ? (count - 1) : (idx - 1));
+    }
+
     return -1;
 }
 
 /**
- * @brief Get the next focused index of the key group
- * @param none
- * @return the next focused index of the key group
+ * @brief get the previous focused object in the key group
+ * @return The index of the previous focused object
  */
-static int16_t grp_active_get_focused_next(void)
+static inline int16_t grp_active_get_focused_prev(void)
 {
-    int ret = key_grp_active->focused;
-    if (ret == (key_grp_active->count - 1)) {
-        ret = 0;
-    } else {
-        ret ++;
-    }
+    return grp_active_get_focused_neighbor(false);
+}
 
-    for (int i = 0; i < key_grp_active->count; i++) {
-        if (key_grp_active->obj[ret] != NULL) {
-            return ret;
-        }
-        ret ++;
-    }
-    return -1;
+/**
+ * @brief get the next focused object in the key group
+ * @return The index of the next focused object
+ */
+static inline int16_t grp_active_get_focused_next(void)
+{
+    return grp_active_get_focused_neighbor(true);
 }
 
 /**
@@ -611,11 +617,10 @@ sgl_key_group_t* sgl_key_group_create(uint16_t max_num)
         return NULL;
     }
 
-    grp->count = 0;
+    grp->count = max_num;
     grp->focused = -1;
     grp->pressed = false;
     grp->editing = false;
-    grp->obj_size = max_num;
     memset(grp->obj, 0, sizeof(struct sgl_obj*) * max_num);
 
     if (key_grp_active == NULL) {
@@ -640,42 +645,48 @@ void sgl_key_group_delete(sgl_key_group_t *group)
  * @brief Add an object to the key group
  * @param group The pointer to the key group
  * @param obj The object to add
- * @return none
+ * @return > 0 : success, -1 : failed
  */
-void sgl_key_group_add_obj(sgl_key_group_t *group, struct sgl_obj *obj)
+int sgl_key_group_add_obj(sgl_key_group_t *group, struct sgl_obj *obj)
 {
-    if (!group || !obj || 
-        group->count >= group->obj_size) {
-        return;
+    if (!group || !obj || group->count == 0) {
+        return -1;
     }
 
-    group->obj[group->count++] = obj;
+    for (uint16_t i = 0; i < group->count; i++) {
+        if (group->obj[i] == NULL) {
+            group->obj[i] = obj;
+            return i;
+        }
+    }
+    return -1;
 }
 
 /**
  * @brief Remove an object from the key group
  * @param group The pointer to the key group
  * @param obj The object to remove
- * @return none
+ * @return > 0 : success, -1 : failed
  */
-void sgl_key_group_remove_obj(sgl_key_group_t *group, struct sgl_obj *obj)
+int sgl_key_group_remove_obj(sgl_key_group_t *group, struct sgl_obj *obj)
 {
     if (!group || !obj || group->count == 0) {
-        return;
+        return -1;
     }
 
     for (int i = 0; i < group->count; i++) {
         if (group->obj[i] == obj) {
             if (grp_active_get_focused() == obj) {
                 key_grp_active->focused = grp_active_get_focused_prev();
-                key_grp_active->editing = false;
+                key_grp_active->editing = 0;
                 event_set_focus(grp_active_get_focused(), true);
             }
 
             group->obj[i] = NULL;
-            break;
+            return i;
         }
     }
+    return -1;
 }
 
 /**
@@ -689,12 +700,12 @@ void sgl_key_group_load(sgl_key_group_t *group)
         if (grp_active_is_focused()) {
             event_set_focus(grp_active_get_focused(), false);
             key_grp_active->focused = -1;
-            key_grp_active->editing = false;
+            key_grp_active->editing = 0;
         }
 
         key_grp_active = group;
         key_grp_active->focused = -1;
-        key_grp_active->editing = false;
+        key_grp_active->editing = 0;
     }
 }
 
@@ -756,17 +767,17 @@ void sgl_key_enter_pressed(void)
     if (!sgl_obj_is_editable(obj)) {
         sgl_event_t evt;
         event_type_callback(obj, &evt, SGL_EVENT_PRESSED);
-        key_grp_active->pressed = true;
+        key_grp_active->pressed = 1;
     }
     else {
         if (!grp_active_is_editing()) {
-            key_grp_active->editing = true;
+            key_grp_active->editing = 1;
         }
         else {
             sgl_event_t evt;
             sgl_event_type_t type = sgl_obj_is_keypress_mask(obj) ? SGL_EVENT_CLICKED : SGL_EVENT_PRESSED;
             event_type_callback(obj, &evt, type);
-            key_grp_active->pressed = true;
+            key_grp_active->pressed = 1;
         }
     }
 }
@@ -784,7 +795,7 @@ void sgl_key_enter_released(void)
     if (grp_active_is_pressed()) {
         sgl_event_t evt;
         event_type_callback(grp_active_get_focused(), &evt, SGL_EVENT_RELEASED);
-        key_grp_active->pressed = false;
+        key_grp_active->pressed = 0;
 
         if (sgl_key_get_signal(&evt) == SGL_EVENT_DESTROYED) {
             sgl_key_group_remove_obj(key_grp_active, grp_active_get_focused());
@@ -804,7 +815,7 @@ void sgl_key_esc(void)
 
     if (grp_active_is_editing()) {
         sgl_event_t evt;
-        key_grp_active->editing = false;
+        key_grp_active->editing = 0;
         event_type_callback(grp_active_get_focused(), &evt, SGL_EVENT_KEY_ESC);
     }
     else {
