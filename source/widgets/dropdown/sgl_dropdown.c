@@ -54,11 +54,12 @@ static const sgl_icon_pixmap_t dropdown_icon = {
     .width = 18,
 };
 
-static inline void sgl_dropdown_clamp_pos_y(sgl_dropdown_t *dropdown, int list_h, int item_height)
+static void sgl_dropdown_clamp_pos_y(sgl_dropdown_t *dropdown, int list_h, int item_height)
 {
     if (dropdown->pos_y > 0) {
         dropdown->pos_y = 0;
-    } else {
+    }
+    else {
         const int min_pos = list_h - dropdown->item_num * item_height;
         if (dropdown->pos_y < min_pos) {
             dropdown->pos_y = min_pos;
@@ -66,7 +67,7 @@ static inline void sgl_dropdown_clamp_pos_y(sgl_dropdown_t *dropdown, int list_h
     }
 }
 
-static inline void sgl_dropdown_ensure_visible(sgl_dropdown_t *dropdown, int list_h, int item_height)
+static void sgl_dropdown_ensure_visible(sgl_dropdown_t *dropdown, int list_h, int item_height)
 {
     const int selected_y = dropdown->item_selected * item_height;
     const int view_top = -dropdown->pos_y;
@@ -74,7 +75,8 @@ static inline void sgl_dropdown_ensure_visible(sgl_dropdown_t *dropdown, int lis
 
     if (selected_y < view_top) {
         dropdown->pos_y = -selected_y;
-    } else if (selected_y + item_height > view_bottom) {
+    }
+    else if (selected_y + item_height > view_bottom) {
         dropdown->pos_y = -(selected_y + item_height - list_h);
     }
     sgl_dropdown_clamp_pos_y(dropdown, list_h, item_height);
@@ -249,27 +251,23 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_even
         break;
 
     case SGL_EVENT_KEY_DOWN:
+    case SGL_EVENT_KEY_UP:
+    case SGL_EVENT_KEY_LEFT:
     case SGL_EVENT_KEY_RIGHT: {
         if (dropdown->item_num == 0 || (!dropdown->is_open)) break;
-        if (dropdown->item_selected < dropdown->item_num - 1) {
+        if ((evt->type == SGL_EVENT_KEY_DOWN || evt->type == SGL_EVENT_KEY_RIGHT)
+            && (dropdown->item_selected < dropdown->item_num - 1)) {
             dropdown->item_selected++;
-            if (dropdown->is_open) {
-                sgl_dropdown_ensure_visible(dropdown, list_h, item_height);
-            }
-            sgl_obj_set_dirty(obj);
         }
-    } break;
-
-    case SGL_EVENT_KEY_UP:
-    case SGL_EVENT_KEY_LEFT: {
-        if (dropdown->item_num == 0 || (!dropdown->is_open)) break;
-        if (dropdown->item_selected > 0) {
+        else if ((evt->type == SGL_EVENT_KEY_UP || evt->type == SGL_EVENT_KEY_LEFT)
+            && (dropdown->item_selected > 0)) {
             dropdown->item_selected--;
-            if (dropdown->is_open) {
-                sgl_dropdown_ensure_visible(dropdown, list_h, item_height);
-            }
-            sgl_obj_set_dirty(obj);
         }
+
+        if (dropdown->is_open) {
+            sgl_dropdown_ensure_visible(dropdown, list_h, item_height);
+        }
+        sgl_obj_set_dirty(obj);
     } break;
 
     default:

@@ -244,8 +244,7 @@ void sgl_draw_dashed_line_noaa(sgl_surf_t *surf, sgl_area_t *area, int16_t x1, i
     int16_t e2;
     int16_t dash_len = 0;
 
-    if (gap <= 0) gap = 1;
-
+    gap = sgl_max(1, gap);
     while (1) {
         if (dash_len < gap) {
             if (x1 >= clip.x1 && x1 <= clip.x2 && y1 >= clip.y1 && y1 <= clip.y2) {
