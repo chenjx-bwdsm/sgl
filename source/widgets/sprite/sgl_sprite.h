@@ -31,6 +31,13 @@
 
 /**
  * @WARNING!!!!!!
+ * 
+ * This module provides a lightweight Sprite object, primarily used for
+ * character rendering and background drawing in games. It supports alpha
+ * blending and global opacity control with ARGB4444 textures, suitable for
+ * rendering characters, NPCs, map tiles, UI icons, and other elements in
+ * 2D game scenes.
+ * 
  * sgl sprite is only support ARGB4444 pixmap format
  * sgl sprite is only support ARGB4444 pixmap format
  * sgl sprite is only support ARGB4444 pixmap format
