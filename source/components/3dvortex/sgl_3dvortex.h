@@ -23,6 +23,7 @@ typedef struct sgl_3dvortex {
     void           *state;
     bool            running;
     uint8_t         trail_alpha;
+    bool            update;
 } sgl_3dvortex_t;
 
 sgl_obj_t* sgl_3dvortex_create(sgl_obj_t* parent);

@@ -138,38 +138,12 @@ static void process_particles(VortexState *v)
     }
 }
 
-static void draw_rect_blend(sgl_color_t *buf, int surf_w,
-                            const sgl_area_t *clip,
-                            int rx, int ry, int rw, int rh,
-                            sgl_color_t color, uint8_t alpha)
+static void apply_trail(sgl_surf_t *surf, const sgl_area_t *clip, uint8_t trail_alpha)
 {
-    int x0 = sgl_max(rx, clip->x1);
-    int y0 = sgl_max(ry, clip->y1);
-    int x1 = sgl_min(rx + rw - 1, clip->x2);
-    int y1 = sgl_min(ry + rh - 1, clip->y2);
-    if (x0 > x1 || y0 > y1) return;
-
-    for (int y = y0; y <= y1; y++) {
-        sgl_color_t *row = buf + (y - clip->y1) * surf_w + (x0 - clip->x1);
-        for (int x = x0; x <= x1; x++, row++) {
-            *row = sgl_color_mixer(color, *row, alpha);
-        }
-    }
+    sgl_draw_fill_rect(surf, (sgl_area_t *)clip, (sgl_area_t *)clip, 0, SGL_COLOR_BLACK, trail_alpha);
 }
 
-static void apply_trail(sgl_color_t *buf, int surf_w,
-                        const sgl_area_t *clip, uint8_t trail_alpha)
-{
-    sgl_color_t black = sgl_rgb(0, 0, 0);
-    for (int y = clip->y1; y <= clip->y2; y++) {
-        sgl_color_t *row = buf + (y - clip->y1) * surf_w;
-        for (int x = clip->x1; x <= clip->x2; x++, row++) {
-            *row = sgl_color_mixer(black, *row, trail_alpha);
-        }
-    }
-}
-
-static void draw_floor(sgl_color_t *buf, int surf_w, const sgl_area_t *clip, const VortexState *v)
+static void draw_floor(sgl_surf_t *surf, sgl_area_t *clip, const VortexState *v)
 {
     for (int sign = 0; sign < 2; sign++) {
         float floor_y = sign ? -FLOOR_Y : FLOOR_Y;
@@ -197,15 +171,22 @@ static void draw_floor(sgl_color_t *buf, int surf_w, const sgl_area_t *clip, con
                                        : (fd / 26.0f - (float)v->frameNo / 40.0f);
                 float blend = 0.5f + sgl_sinf_rad(sign ? (-fd/6.0f - (float)v->frameNo/8.0f)
                                                   : (fd/6.0f - (float)v->frameNo/8.0f)) / 2.0f;
-                
+
                 sgl_color_t dyn_col = rgb_from_col(col_param);
                 sgl_color_t final_col = sgl_color_mixer(dyn_col, base_col, (uint8_t)(blend * 255.0f));
 
-                int px = (int)(proj.x - size * 0.5f) + v->cx - (float)v->width / 2.0f; 
+                int px = (int)(proj.x - size * 0.5f) + v->cx - (float)v->width / 2.0f;
                 int py = (int)(proj.y - size * 0.5f) + v->cy - (float)v->height / 2.0f;
                 int ps = (int)size;
                 if (ps < 1) ps = 1;
-                draw_rect_blend(buf, surf_w, clip, px, py, ps, ps, final_col, (uint8_t)(alpha * 255.0f));
+
+                sgl_area_t rect = {
+                    .x1 = (int16_t)px,
+                    .y1 = (int16_t)py,
+                    .x2 = (int16_t)(px + ps - 1),
+                    .y2 = (int16_t)(py + ps - 1)
+                };
+                sgl_draw_fill_rect(surf, clip, &rect, 0, final_col, (uint8_t)(alpha * 255.0f));
             }
         }
     }
@@ -222,19 +203,18 @@ static void sgl_3dvortex_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
     sgl_area_t clip = SGL_AREA_MAX;
     sgl_surf_clip_area_return(surf, &obj->area, &clip);
 
-    v->width  = clip.x2 - clip.x1 + 1;
-    v->height = clip.y2 - clip.y1 + 1;
-    v->cx = (float)v->width / 2.0f;
-    v->cy = (float)v->height / 2.0f;
+    if (vortex->update) {
+        v->width  = obj->coords.x2 - obj->coords.x1 + 1;
+        v->height = obj->coords.y2 - obj->coords.y1 + 1;
+        v->cx = (float)v->width / 2.0f;
+        v->cy = (float)v->height / 2.0f;
+        process_particles(v);
+    }
 
-    v->frameNo++;
-    process_particles(v);
-
-    sgl_color_t *buf = sgl_surf_get_buf(surf, clip.x1 - surf->x1, clip.y1 - surf->y1);
-
-    apply_trail(buf, surf->w, &clip, vortex->trail_alpha);
-
-    draw_floor(buf, surf->w, &clip, v);
+    if (vortex->update) {
+        apply_trail(surf, &clip, vortex->trail_alpha);
+    }
+    draw_floor(surf, &clip, v);
 
     typedef struct { int idx; float dist; } VisParticle_t;
     VisParticle_t visible[SGL_VORTEX_MAX_PARTICLES];
@@ -285,10 +265,21 @@ static void sgl_3dvortex_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
         int ps = (int)size;
         if (ps < 1) ps = 1;
 
-        draw_rect_blend(buf, surf->w, &clip, px, py, ps, ps, col, alpha);
+        sgl_area_t rect = {
+            .x1 = (int16_t)px,
+            .y1 = (int16_t)py,
+            .x2 = (int16_t)(px + ps - 1),
+            .y2 = (int16_t)(py + ps - 1)
+        };
+        sgl_draw_fill_rect(surf, &clip, &rect, 0, col, alpha);
     }
 
-    sgl_obj_set_dirty(obj);
+    vortex->update = false;
+    if (clip.y2 == surf->dirty->y2) {
+        v->frameNo++;
+        sgl_obj_set_dirty(obj);
+        vortex->update = true;
+    }
 }
 
 sgl_obj_t* sgl_3dvortex_create(sgl_obj_t* parent)
@@ -322,6 +313,7 @@ sgl_obj_t* sgl_3dvortex_create(sgl_obj_t* parent)
     vortex->state = v;
     vortex->running = true;
     vortex->trail_alpha = SGL_VORTEX_TRAIL_ALPHA;
+    vortex->update = true;
 
     sgl_obj_t *obj = &vortex->obj;
     sgl_obj_init(obj, parent);
@@ -353,5 +345,6 @@ void sgl_3dvortex_reset(sgl_obj_t *obj)
         v->frameNo = 0;
         v->camZ = CAM_Z_INIT;
     }
+    vortex->update = true;
     sgl_obj_set_dirty(obj);
 }
