@@ -70,5 +70,6 @@
 #include "widgets/sprite/sgl_sprite.h"
 #include "widgets/analogclock/sgl_analogclock.h"
 #include "components/timer/sgl_timer.h"
+#include "components/3dvortex/sgl_3dvortex.h"
 
 #endif // __SGL_H__

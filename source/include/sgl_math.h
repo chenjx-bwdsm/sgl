@@ -66,7 +66,10 @@ extern "C" {
 #define SGL_SIN_FIXED_ONE                 (32768)
 #define SGL_COS_FIXED_ONE                 (32768)
 
+#define SGL_PI                            (3.1415926f)
 #define SGL_INV_360                       (1.0f / 360.0f)
+#define SGL_RAD_TO_DEG                    (57.29577951308232f)
+#define SGL_DEG_TO_RAD                    (0.017453292519943295f)
 
 /**
  * @brief Calculate the absolute value of a float number.
@@ -136,6 +139,30 @@ static inline float sgl_cosf(float angle)
 }
 
 /**
+ * @brief Calculate the sine of an angle (radian version)
+ * @param rad: Angle in radians
+ * @return sine of the angle
+ * @note Internally converts to degrees and delegates to sgl_sinf().
+ *       No manual normalization needed — sgl_sinf handles it.
+ */
+static inline float sgl_sinf_rad(float rad)
+{
+    return sgl_sinf(rad * SGL_RAD_TO_DEG);
+}
+
+/**
+ * @brief Calculate the cosine of an angle (radian version)
+ * @param rad: Angle in radians
+ * @return cosine of the angle
+ * @note Uses identity cos(x) = sin(x + π/2), then delegates to sgl_sinf().
+ *       The +90° offset is applied AFTER conversion, matching sgl_cosf's logic.
+ */
+static inline float sgl_cosf_rad(float rad)
+{
+    return sgl_cosf(rad * SGL_RAD_TO_DEG);
+}
+
+/**
  * @brief  Calculate x number square root
  * @param  x: x number
  * @retval x number square root
@@ -177,6 +204,16 @@ int32_t sgl_atan2_raw(int x, int y);
  * @note return angle [0 ~ 359]
 */
 uint16_t sgl_atan2(int x, int y);
+
+/**
+ * @brief Fast atan2 returning radians in (-π, π], backed by sgl_atan2 LUT.
+ * @param x: The x coordinate (standard atan2 parameter order)
+ * @param y: The y coordinate (standard atan2 parameter order)
+ * @return Angle in radians in the range (-π, π]
+ * @note Internally delegates to sgl_atan2(x, y) and converts [0,359] degrees
+ *       to signed radians. Resolution is limited to ~1° (~0.01745 rad).
+ */
+float sgl_atan2f_rad(float x, float y);
 
 /**
  * @brief Calculate the angle based on the x and y coordinates. This function is a fast algorithm 
@@ -230,6 +267,17 @@ static inline int sgl_xy_has_component( int x, int y, int xv, int yv)
  * @note The random number generator is in the range of [0, 32767].
  */
 int16_t sgl_rand(void);
+
+/**
+ * @brief Generate a float random number.
+ * @param none
+ * @return Random number.
+ * @note The random number generator is in the range of [0, 1].
+ */
+static inline float sgl_randf(void)
+{
+    return (float)sgl_rand() / (float)32767;
+}
 
 /**
  * @brief Set the seed of the random number generator.

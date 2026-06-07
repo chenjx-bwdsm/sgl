@@ -371,6 +371,27 @@ uint16_t sgl_atan2(int x, int y)
 }
 
 /**
+ * @brief Fast atan2 returning radians in (-π, π], backed by sgl_atan2 LUT.
+ * @param x: The x coordinate (standard atan2 parameter order)
+ * @param y: The y coordinate (standard atan2 parameter order)
+ * @return Angle in radians in the range (-π, π]
+ * @note Internally delegates to sgl_atan2(x, y) and converts [0,359] degrees
+ *       to signed radians. Resolution is limited to ~1° (~0.01745 rad).
+ */
+float sgl_atan2f_rad(float x, float y)
+{
+    float abs_x = sgl_fabsf(x), abs_y = sgl_fabsf(y);
+    if (abs_x < 0.000001f && abs_y < 0.000001f) return 0.0f;
+    float a = (abs_x < abs_y) ? abs_x / abs_y : abs_y / abs_x;
+    float s = a * a;
+    float r = ((-0.0464964749f * s + 0.15931422f) * s - 0.327622764f) * s * a + a;
+    if (abs_y > abs_x) r = 1.57079637f - r;
+    if (x < 0.0f)      r = 3.14159274f - r;
+    if (y < 0.0f)      r = -r;
+    return r;
+}
+
+/**
  * @brief Internal helper function: Reverse-lookup integer angles between 0 and 45 degrees using the existing sine table
  * @note Principle: Within the 0-45 degree range, given an input slope `ratio` = y/x, a binary search is used to find the 
  *       angle that satisfies `sin(a)/cos(a) ≈ ratio`
