@@ -35,8 +35,8 @@ typedef struct sgl_logo {
 static void sgl_logo_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t *evt)
 {
     sgl_logo_t *logo = (sgl_logo_t*)obj;
-    int16_t w = obj->coords.x2 - obj->coords.x1 + 1;
-    int16_t h = obj->coords.y2 - obj->coords.y1 + 1;
+    const int16_t w = obj->coords.x2 - obj->coords.x1 + 1;
+    const int16_t h = obj->coords.y2 - obj->coords.y1 + 1;
 
     #define NORMALIZATION_FACTOR    1024
     #define rel_value(v)            ((v) * w / NORMALIZATION_FACTOR)
@@ -68,20 +68,15 @@ static void sgl_logo_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t 
     const int16_t pin_gap = 66;
 
     if(evt->type == SGL_EVENT_DRAW_MAIN) {
-        sgl_area_t clip;
-        if (!sgl_surf_clip(surf, &obj->area, &clip)) {
-            return;
-        }
-
-        sgl_draw_fill_rect_border(surf, &clip, &rect,
+        sgl_draw_fill_rect_border(surf, &obj->area, &rect,
                                   rel_value(40), SGL_COLOR_BLUE, rel_value(51), logo->alpha);
 
-        sgl_draw_fill_rect_border(surf, &clip, &sw_rect,
+        sgl_draw_fill_rect_border(surf, &obj->area, &sw_rect,
                                   rel_value(75), SGL_COLOR_BLUE, rel_value(20), logo->alpha);
-        sgl_draw_fill_rect(surf, &clip, &sw_rect2,
+        sgl_draw_fill_rect(surf, &obj->area, &sw_rect2,
                                   rel_value(75), SGL_COLOR_BLUE, logo->alpha);
 
-        sgl_draw_fill_circle(surf, &clip, pos_x_val(446), pos_y_val(410), rel_value(60), SGL_COLOR_BLUE, logo->alpha);
+        sgl_draw_fill_circle(surf, &obj->area, pos_x_val(446), pos_y_val(410), rel_value(60), SGL_COLOR_BLUE, logo->alpha);
         sgl_rect_t pin_rect;
 
         for (int i = 0, x = 230; i < 5; i++) {
@@ -89,7 +84,7 @@ static void sgl_logo_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t 
             pin_rect.y1 = pos_y_val(0);
             pin_rect.x2 = pos_x_val(x + pin_w);
             pin_rect.y2 = pos_y_val(130);
-            sgl_draw_fill_rect(surf, &clip, &pin_rect, 0, SGL_COLOR_BLUE, logo->alpha);
+            sgl_draw_fill_rect(surf, &obj->area, &pin_rect, 0, SGL_COLOR_BLUE, logo->alpha);
             x += pin_w + pin_gap;
         }
 
@@ -98,7 +93,7 @@ static void sgl_logo_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t 
             pin_rect.y1 = pos_y_val(894);
             pin_rect.x2 = pos_x_val(x + pin_w);
             pin_rect.y2 = pos_y_val(1024);
-            sgl_draw_fill_rect(surf, &clip, &pin_rect, 0, SGL_COLOR_BLUE, logo->alpha);
+            sgl_draw_fill_rect(surf, &obj->area, &pin_rect, 0, SGL_COLOR_BLUE, logo->alpha);
             x += pin_w + pin_gap;
         }
 
@@ -107,7 +102,7 @@ static void sgl_logo_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t 
             pin_rect.y1 = pos_y_val(y);
             pin_rect.x2 = pos_x_val(130);
             pin_rect.y2 = pos_y_val(y + pin_w);
-            sgl_draw_fill_rect(surf, &clip, &pin_rect, 0, SGL_COLOR_BLUE, logo->alpha);
+            sgl_draw_fill_rect(surf, &obj->area, &pin_rect, 0, SGL_COLOR_BLUE, logo->alpha);
             y += pin_w + pin_gap;
         }
 
@@ -116,7 +111,7 @@ static void sgl_logo_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t 
             pin_rect.y1 = pos_y_val(y);
             pin_rect.x2 = pos_x_val(1024);
             pin_rect.y2 = pos_y_val(y + pin_w);
-            sgl_draw_fill_rect(surf, &clip, &pin_rect, 0, SGL_COLOR_BLUE, logo->alpha);
+            sgl_draw_fill_rect(surf, &obj->area, &pin_rect, 0, SGL_COLOR_BLUE, logo->alpha);
             y += pin_w + pin_gap;
         }
     }
