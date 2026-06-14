@@ -23,6 +23,40 @@
  */
 #include "sgl_statusbar.h"
 
+static void statusbar_update_slot(sgl_statusbar_t *bar, uint8_t index, bool left, sgl_area_t *area)
+{
+    int16_t pos_x, pos_y;
+    sgl_obj_t *obj = &bar->obj;
+    pos_y = obj->coords.y1 + (sgl_obj_get_height(obj) - bar->font->font_height) / 2;
+
+    if (left) {
+        pos_x = obj->coords.x1 + bar->left_margin;
+        for (int i = 0; i < index; i++) {
+            if (bar->slot_left[i].slot == NULL) {
+                continue;
+            }
+            pos_x += sgl_font_get_string_width(bar->slot_left[i].slot, bar->font);
+            pos_x += bar->slot_space;
+        }
+        area->x1 = pos_x;
+        area->x2 = pos_x + sgl_font_get_string_width(bar->slot_left[index].slot, bar->font);
+    }
+    else {
+        pos_x = obj->coords.x2 - bar->right_margin;
+        for (int i = 0; i < index; i++) {
+            if (bar->slot_right[i].slot == NULL) {
+                continue;
+            }
+            pos_x -= sgl_font_get_string_width(bar->slot_right[i].slot, bar->font);
+            pos_x -= bar->slot_space;
+        }
+        area->x1 = pos_x - sgl_font_get_string_width(bar->slot_right[index].slot, bar->font);
+        area->x2 = pos_x;
+    }
+    area->y1 = pos_y;
+    area->y2 = pos_y + bar->font->font_height;
+}
+
 static void sgl_statusbar_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_event_t *evt)
 {
     sgl_statusbar_t *bar = sgl_container_of(obj, sgl_statusbar_t, obj);
@@ -209,9 +243,12 @@ void sgl_statusbar_remove_right_slot(sgl_obj_t *obj, uint8_t index)
 void sgl_statusbar_set_left_slot_alpha(sgl_obj_t *obj, uint8_t index, uint8_t alpha)
 {
     sgl_statusbar_t *bar = sgl_container_of(obj, sgl_statusbar_t, obj);
+    sgl_area_t area;
+
     if (index < SGL_STATUSBAR_LEFT_MAX) {
         bar->slot_left[index].alpha = alpha;
-        sgl_obj_set_dirty(obj);
+        statusbar_update_slot(bar, index, true, &area);
+        sgl_obj_update_area(&area);
     }
 }
 
@@ -224,9 +261,12 @@ void sgl_statusbar_set_left_slot_alpha(sgl_obj_t *obj, uint8_t index, uint8_t al
 void sgl_statusbar_set_right_slot_alpha(sgl_obj_t *obj, uint8_t index, uint8_t alpha)
 {
     sgl_statusbar_t *bar = sgl_container_of(obj, sgl_statusbar_t, obj);
+    sgl_area_t area;
+
     if (index < SGL_STATUSBAR_RIGHT_MAX) {
         bar->slot_right[index].alpha = alpha;
-        sgl_obj_set_dirty(obj);
+        statusbar_update_slot(bar, index, false, &area);
+        sgl_obj_update_area(&area);
     }
 }
 
@@ -239,9 +279,12 @@ void sgl_statusbar_set_right_slot_alpha(sgl_obj_t *obj, uint8_t index, uint8_t a
 void sgl_statusbar_set_left_slot_color(sgl_obj_t *obj, uint8_t index, sgl_color_t color)
 {
     sgl_statusbar_t *bar = sgl_container_of(obj, sgl_statusbar_t, obj);
+    sgl_area_t area;
+
     if (index < SGL_STATUSBAR_LEFT_MAX) {
         bar->slot_left[index].color = color;
-        sgl_obj_set_dirty(obj);
+        statusbar_update_slot(bar, index, true, &area);
+        sgl_obj_update_area(&area);
     }
 }
 
@@ -254,9 +297,12 @@ void sgl_statusbar_set_left_slot_color(sgl_obj_t *obj, uint8_t index, sgl_color_
 void sgl_statusbar_set_right_slot_color(sgl_obj_t *obj, uint8_t index, sgl_color_t color)
 {
     sgl_statusbar_t *bar = sgl_container_of(obj, sgl_statusbar_t, obj);
+    sgl_area_t area;
+
     if (index < SGL_STATUSBAR_LEFT_MAX) {
         bar->slot_right[index].color = color;
-        sgl_obj_set_dirty(obj);
+        statusbar_update_slot(bar, index, false, &area);
+        sgl_obj_update_area(&area);
     }
 }
 
