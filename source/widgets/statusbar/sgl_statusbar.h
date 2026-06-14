@@ -87,20 +87,27 @@ void sgl_statusbar_set_bg_color(sgl_obj_t *obj, sgl_color_t color);
 void sgl_statusbar_set_bg_alpha(sgl_obj_t *obj, uint8_t alpha);
 
 /**
- * @brief Set left slot
+ * @brief Set statusbar background radius
  * @param obj statusbar object
- * @param index icon index
- * @param slot it may be a UTF8 code or string
+ * @param radius background radius
  */
-void sgl_statusbar_set_left_slot(sgl_obj_t *obj, uint8_t index, char* slot);
+void sgl_statusbar_set_bg_radius(sgl_obj_t *obj, uint8_t radius);
 
 /**
- * @brief Set right slot
+ * @brief Add left slot
  * @param obj statusbar object
  * @param index icon index
  * @param slot it may be a UTF8 code or string
  */
-void sgl_statusbar_set_right_slot(sgl_obj_t *obj, uint8_t index, char* slot);
+void sgl_statusbar_add_left_slot(sgl_obj_t *obj, uint8_t index, char* slot);
+
+/**
+ * @brief Add right slot
+ * @param obj statusbar object
+ * @param index icon index
+ * @param slot it may be a UTF8 code or string
+ */
+void sgl_statusbar_add_right_slot(sgl_obj_t *obj, uint8_t index, char* slot);
 
 /**
  * @brief Remove left slot
@@ -162,6 +169,22 @@ void sgl_statusbar_set_slot_space(sgl_obj_t *obj, uint8_t space);
  * @param right right slot margin
  */
 void sgl_statusbar_set_slot_margin(sgl_obj_t *obj, uint8_t left, uint8_t right);
+
+/**
+ * @brief Get left slot index
+ * @param obj statusbar object
+ * @param slot slot
+ * @return slot index
+ */
+int16_t sgl_statusbar_get_left_slot_index(sgl_obj_t *obj, char *slot);
+
+/**
+ * @brief Get right slot index
+ * @param obj statusbar object
+ * @param slot slot
+ * @return slot index
+ */
+int16_t sgl_statusbar_get_right_slot_index(sgl_obj_t *obj, char *slot);
 
 #ifdef __cplusplus
 }
