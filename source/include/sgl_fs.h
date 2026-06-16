@@ -90,7 +90,7 @@ typedef struct sgl_block_dev {
  * @stat: get file status
  * @rename: rename file
  */
-typedef struct sgl_vfs_ops {
+typedef struct sgl_fs_ops {
     int (*mount)(void **fs, struct sgl_block_dev *dev, const char *mount_point, void *fs_config);
     int (*unmount)(void *fs, const char *mount_point);
 
@@ -110,7 +110,7 @@ typedef struct sgl_vfs_ops {
 
     int (*stat)(void *fs, const char *path, sgl_stat_t *st);
     int (*rename)(void *fs, const char *old_path, const char *new_path);
-} sgl_vfs_ops_t;
+} sgl_fs_ops_t;
 
 /**
  * @brief File system type
@@ -120,7 +120,7 @@ typedef struct sgl_vfs_ops {
 typedef struct sgl_fs_type {
     sgl_list_node_t node;
     const char *name;
-    sgl_vfs_ops_t *ops;
+    sgl_fs_ops_t *ops;
 } sgl_fs_type_t;
 
 /**
@@ -178,14 +178,6 @@ int sgl_fs_register(sgl_fs_type_t *fs_type);
  * @return 0 on success, -1 on failure
  */
 int sgl_fs_mount(const char *mount_point, const char *fs_name, sgl_block_dev_t *dev, void *fs_config);
-
-/**
- * @brief Resolve a path to a mount point
- * @param path Path to resolve
- * @param rel_path Pointer to store the relative path
- * @return Mount point pointer, or NULL if not found
- */
-static sgl_mount_point_t* resolve_path(const char *path, const char **rel_path);
 
 /**
  * @brief Open a file
