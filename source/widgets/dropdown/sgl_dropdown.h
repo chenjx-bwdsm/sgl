@@ -33,21 +33,15 @@
 #include <sgl_cfgfix.h>
 #include <string.h>
 
-
-typedef struct sgl_dropdown_item {
-    struct sgl_dropdown_item *next;
-    const char *text;
-} sgl_dropdown_item_t;
-
 /**
  * @brief sgl dropdown struct
  * @desc: text description
  */
 typedef struct sgl_dropdown {
     sgl_obj_t             obj;
-    sgl_dropdown_item_t   *head;
-    sgl_dropdown_item_t   *tail;
     const sgl_font_t      *font;
+    char                  *opt_text;
+    uint16_t              text_offset;
     sgl_color_t           text_color;
     int16_t               item_selected;
     sgl_color_t           item_selected_color;
@@ -55,12 +49,12 @@ typedef struct sgl_dropdown {
     sgl_color_t           bg_color;
     sgl_color_t           border_color;
     int16_t               pos_y;
-    uint16_t              option_h;
+    uint8_t               option_h;
     uint8_t               alpha;
-    bool                  is_open;
-    uint16_t              max_visible_item;
+    uint8_t               is_open : 1;
+    uint8_t               dynamic_text : 7;
+    uint8_t               max_visible_item;
 } sgl_dropdown_t;
-
 
 /**
  * @brief create a dropdown object
@@ -137,9 +131,25 @@ int sgl_dropdown_get_selected_index(sgl_obj_t *obj);
 /**
  * @brief get dropdown object's selected text
  * @param obj dropdown object
- * @return selected text
+ * @param buf buffer to store the selected text
+ * @param buf_size size of the buffer
+ * @return true if successful, false otherwise
  */
-const char *sgl_dropdown_get_selected_text(sgl_obj_t *obj);
+bool sgl_dropdown_get_selected_text(sgl_obj_t *obj, char *buf, int buf_size);
+
+/**
+ * @brief set options with static text (no copy, caller ensures text lifetime)
+ * @param obj dropdown object
+ * @param text \n-separated option text
+ */
+void sgl_dropdown_set_option_static(sgl_obj_t *obj, const char *text);
+
+/**
+ * @brief set options with dynamic text (makes a copy)
+ * @param obj dropdown object
+ * @param text \n-separated option text
+ */
+void sgl_dropdown_set_option_dynamic(sgl_obj_t *obj, const char *text);
 
 /**
  * @brief add an option to the dropdown

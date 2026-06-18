@@ -123,7 +123,6 @@ static void sgl_label_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t
     }
 }
 
-
 /**
  * @brief create a label object
  * @param parent parent of the label
@@ -165,6 +164,10 @@ void sgl_label_set_text(sgl_obj_t *obj, const char *text)
 {
     sgl_label_t *label = sgl_container_of(obj, sgl_label_t, obj);
     sgl_area_t area = SGL_AREA_INVALID, new_area = SGL_AREA_INVALID;
+
+    if (label->text && strcmp(text, label->text) == 0) {
+        return;
+    }
 
     sgl_label_update_area(label, label->text, &area);
     sgl_label_update_area(label, text, &new_area);
