@@ -29,6 +29,7 @@
 #include <sgl_mm.h>
 #include <sgl_cfgfix.h>
 #include <sgl_theme.h>
+#include <sgl_misc.h>
 #include "sgl_dropdown.h"
 
 #define  SGL_DROPDOWN_OPTION_PAD    (3)
@@ -53,49 +54,11 @@ static const sgl_icon_pixmap_t dropdown_icon = {
     .width = 18,
 };
 
-static uint16_t count_options(const char *text)
-{
-    if (!text || !*text) return 0;
-    uint16_t count = 0;
-    const char *p = text;
-    while (*p) {
-        if (*p == '\n') count++;
-        p++;
-    }
-    if (p > text && *(p - 1) != '\n') count++;
-    return count;
-}
-
-static int get_option_offset(const char *text, int index)
-{
-    if (!text) return -1;
-    int cur = 0;
-    const char *p = text;
-    while (cur < index) {
-        while (*p && *p != '\n') p++;
-        if (*p == '\n') p++;
-        else return -1;
-        cur++;
-    }
-    return (int)(p - text);
-}
-
-static int get_option_text_len(const char *text, int offset)
-{
-    const char *p = text + offset;
-    int len = 0;
-    while (*p && *p != '\n') {
-        len++;
-        p++;
-    }
-    return len;
-}
-
 static void update_item_count(sgl_dropdown_t *dropdown)
 {
-    dropdown->item_num = count_options(dropdown->opt_text);
+    dropdown->item_num = sgl_string_option_get_count(dropdown->opt_text);
     if (dropdown->item_selected >= 0 && dropdown->opt_text) {
-        dropdown->text_offset = (uint16_t)get_option_offset(dropdown->opt_text, dropdown->item_selected);
+        dropdown->text_offset = (uint16_t)sgl_string_option_get_offset(dropdown->opt_text, dropdown->item_selected);
     }
 }
 
@@ -111,7 +74,7 @@ static void free_dynamic_text(sgl_dropdown_t *dropdown)
 static void remove_item_at(sgl_dropdown_t *dropdown, int offset)
 {
     int total_len = (int)strlen(dropdown->opt_text);
-    int item_len = get_option_text_len(dropdown->opt_text, offset);
+    int item_len = sgl_string_option_get_text_len(dropdown->opt_text, offset);
     int entry_len = item_len + (dropdown->opt_text[offset + item_len] == '\n' ? 1 : 0);
     int remaining = total_len - (offset + entry_len);
     if (remaining > 0) {
@@ -201,7 +164,7 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_even
         /* Draw the selected item text on the closed dropdown header */
         if (dropdown->opt_text && dropdown->item_selected >= 0 && dropdown->item_selected < dropdown->item_num) {
             const char *sel_text = dropdown->opt_text + dropdown->text_offset;
-            int len = get_option_text_len(dropdown->opt_text, dropdown->text_offset);
+            int len = sgl_string_option_get_text_len(dropdown->opt_text, dropdown->text_offset);
             if (len >= (int)sizeof(text_buf)) len = (int)sizeof(text_buf) - 1;
             memcpy(text_buf, sel_text, len);
             text_buf[len] = '\0';
@@ -242,7 +205,7 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_even
                 if (draw_text_y >= bg_area.y2) break;
 
                 const char *item_text = dropdown->opt_text + offset;
-                int len = get_option_text_len(dropdown->opt_text, offset);
+                int len = sgl_string_option_get_text_len(dropdown->opt_text, offset);
 
                 int copy_len = len < (int)sizeof(text_buf) - 1 ? len : (int)sizeof(text_buf) - 1;
                 memcpy(text_buf, item_text, copy_len);
@@ -306,7 +269,7 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_even
                 int new_sel = (evt->pos.y - obj->coords.y2 - dropdown->pos_y) / item_height;
                 if (new_sel >= 0 && new_sel < dropdown->item_num) {
                     dropdown->item_selected = (int16_t)new_sel;
-                    dropdown->text_offset = (uint16_t)get_option_offset(dropdown->opt_text, dropdown->item_selected);
+                    dropdown->text_offset = (uint16_t)sgl_string_option_get_offset(dropdown->opt_text, dropdown->item_selected);
                 }
             }
         } else {
@@ -343,7 +306,7 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_even
         }
 
         /* Update text_offset for the new selection */
-        dropdown->text_offset = (uint16_t)get_option_offset(dropdown->opt_text, dropdown->item_selected);
+        dropdown->text_offset = (uint16_t)sgl_string_option_get_offset(dropdown->opt_text, dropdown->item_selected);
 
         if (dropdown->is_open) {
             sgl_dropdown_ensure_visible(dropdown, list_h, dropdown->option_h);
@@ -399,11 +362,22 @@ sgl_obj_t* sgl_dropdown_create(sgl_obj_t* parent)
 }
 
 /**
- * @brief set dropdown object's color
+ * @brief set dropdown object's max visible rows
  * @param obj dropdown object
- * @param color color
+ * @param rows max visible rows
  */
-void sgl_dropdown_set_color(sgl_obj_t *obj, sgl_color_t color)
+void sgl_dropdown_set_visible_rows(sgl_obj_t *obj, int16_t rows)
+{
+    sgl_dropdown_t *dropdown = sgl_container_of(obj, sgl_dropdown_t, obj);
+    dropdown->max_visible_item = rows;
+}
+
+/**
+ * @brief set dropdown object's background color
+ * @param obj dropdown object
+ * @param color background color
+ */
+void sgl_dropdown_set_bg_color(sgl_obj_t *obj, sgl_color_t color)
 {
     sgl_dropdown_t *dropdown = sgl_container_of(obj, sgl_dropdown_t, obj);
     dropdown->bg_color = color;
@@ -516,7 +490,7 @@ bool sgl_dropdown_get_selected_text(sgl_obj_t *obj, char *buf, int buf_size)
     if (!dropdown->opt_text || dropdown->item_selected < 0 || dropdown->item_selected >= dropdown->item_num) {
         return false;
     }
-    int len = get_option_text_len(dropdown->opt_text, dropdown->text_offset);
+    int len = sgl_string_option_get_text_len(dropdown->opt_text, dropdown->text_offset);
     if (len >= buf_size) len = buf_size - 1;
     memcpy(buf, dropdown->opt_text + dropdown->text_offset, len);
     buf[len] = '\0';
@@ -627,7 +601,7 @@ void sgl_dropdown_delete_option_by_text(sgl_obj_t *obj, const char *text)
     int item_idx = 0;
 
     while (dropdown->opt_text[offset] != '\0') {
-        int item_len = get_option_text_len(dropdown->opt_text, offset);
+        int item_len = sgl_string_option_get_text_len(dropdown->opt_text, offset);
 
         if (item_len == text_len && memcmp(dropdown->opt_text + offset, text, item_len) == 0) {
             remove_item_at(dropdown, offset);
@@ -654,7 +628,7 @@ void sgl_dropdown_delete_option_by_index(sgl_obj_t *obj, int index)
     sgl_dropdown_t *dropdown = sgl_container_of(obj, sgl_dropdown_t, obj);
     if (!dropdown->opt_text || index < 0 || index >= dropdown->item_num || !dropdown->dynamic_text) return;
 
-    int offset = get_option_offset(dropdown->opt_text, index);
+    int offset = sgl_string_option_get_offset(dropdown->opt_text, index);
     if (offset < 0) return;
 
     remove_item_at(dropdown, offset);

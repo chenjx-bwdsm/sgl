@@ -416,3 +416,58 @@ void sgl_monitor_trace(sgl_surf_t *surf)
     }
 }
 #endif
+
+/**
+ * @brief Count number of options in \n-separated text
+ * @param text newline-separated option string
+ * @return number of options
+ */
+uint16_t sgl_string_option_get_count(const char *text)
+{
+    if (!text || !*text) return 0;
+    uint16_t count = 0;
+    const char *p = text;
+    while (*p) {
+        if (*p == '\n') count++;
+        p++;
+    }
+    if (p > text && *(p - 1) != '\n') count++;
+    return count;
+}
+
+/**
+ * @brief Get byte offset of the Nth option in \n-separated text
+ * @param text newline-separated option string
+ * @param index zero-based option index
+ * @return byte offset, or -1 if out of range
+ */
+int sgl_string_option_get_offset(const char *text, int index)
+{
+    if (!text) return -1;
+    int cur = 0;
+    const char *p = text;
+    while (cur < index) {
+        while (*p && *p != '\n') p++;
+        if (*p == '\n') p++;
+        else return -1;
+        cur++;
+    }
+    return (int)(p - text);
+}
+
+/**
+ * @brief Get text length of one option at given byte offset
+ * @param text option string
+ * @param offset byte offset of the option
+ * @return length (stops at \n or \0)
+ */
+int sgl_string_option_get_text_len(const char *text, int offset)
+{
+    const char *p = text + offset;
+    int len = 0;
+    while (*p && *p != '\n') {
+        len++;
+        p++;
+    }
+    return len;
+}

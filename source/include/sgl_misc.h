@@ -29,10 +29,9 @@
 extern "C" {
 #endif
 
-#include <sgl_cfgfix.h>
 #include <stddef.h>
-#include <sgl_list.h>
 #include <sgl_types.h>
+#include <sgl_core.h>
 
 #if (CONFIG_SGL_BOOT_LOGO)
 
@@ -63,6 +62,29 @@ void sgl_boot_logo(void);
 
 void sgl_monitor_trace(sgl_surf_t *surf);
 #endif
+
+/**
+ * @brief Count number of options in \n-separated text
+ * @param text newline-separated option string
+ * @return number of options
+ */
+uint16_t sgl_string_option_get_count(const char *text);
+
+/**
+ * @brief Get byte offset of the Nth option in \n-separated text
+ * @param text newline-separated option string
+ * @param index zero-based option index
+ * @return byte offset, or -1 if out of range
+ */
+int sgl_string_option_get_offset(const char *text, int index);
+
+/**
+ * @brief Get text length of one option at given byte offset
+ * @param text option string
+ * @param offset byte offset of the option
+ * @return length (stops at \n or \0)
+ */
+int sgl_string_option_get_text_len(const char *text, int offset);
 
 #ifdef __cplusplus
 } /*extern "C"*/

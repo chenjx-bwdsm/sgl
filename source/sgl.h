@@ -69,6 +69,8 @@
 #include "widgets/gauge/sgl_gauge.h"
 #include "widgets/sprite/sgl_sprite.h"
 #include "widgets/analogclock/sgl_analogclock.h"
+#include "widgets/statusbar/sgl_statusbar.h"
+#include "widgets/roller/sgl_roller.h"
 #include "components/timer/sgl_timer.h"
 #include "components/3dvortex/sgl_3dvortex.h"
 

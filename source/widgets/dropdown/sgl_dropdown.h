@@ -33,6 +33,10 @@
 #include <sgl_cfgfix.h>
 #include <string.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief sgl dropdown struct
  * @desc: text description
@@ -64,11 +68,18 @@ typedef struct sgl_dropdown {
 sgl_obj_t* sgl_dropdown_create(sgl_obj_t* parent);
 
 /**
- * @brief set dropdown object's color
+ * @brief set dropdown object's max visible rows
  * @param obj dropdown object
- * @param color color
+ * @param rows max visible rows
  */
-void sgl_dropdown_set_color(sgl_obj_t *obj, sgl_color_t color);
+void sgl_dropdown_set_visible_rows(sgl_obj_t *obj, int16_t rows);
+
+/**
+ * @brief set dropdown object's background color
+ * @param obj dropdown object
+ * @param color background color
+ */
+void sgl_dropdown_set_bg_color(sgl_obj_t *obj, sgl_color_t color);
 
 /**
  * @brief set dropdown object's border width
@@ -174,5 +185,9 @@ void sgl_dropdown_delete_option_by_text(sgl_obj_t *obj, const char *text);
  * @return none
  */
 void sgl_dropdown_delete_option_by_index(sgl_obj_t *obj, int index);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // !__SGL_DROPDOWN_H__
