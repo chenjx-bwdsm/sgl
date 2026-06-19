@@ -303,7 +303,10 @@ void sgl_polygon_set_vertices(sgl_obj_t* obj, const sgl_polygon_pos_t* vertices,
         return;
     }
 
-    // Copy vertex data
+    // Copy vertex data (count already bounded to SGL_POLYGON_VERTEX_MAX by caller check)
+    if (count > SGL_POLYGON_VERTEX_MAX) {
+        count = SGL_POLYGON_VERTEX_MAX;
+    }
     memcpy(polygon->vertices, vertices, sizeof(sgl_polygon_pos_t) * count);
     polygon->vertex_count = count;
     
