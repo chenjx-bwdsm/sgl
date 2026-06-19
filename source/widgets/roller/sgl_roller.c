@@ -40,12 +40,6 @@ static inline int roller_draw_height(const sgl_roller_t *roller, int item_h)
     return sgl_max(widget_h, 3 * item_h);
 }
 
-/** Effective visible rows from draw height */
-static inline int roller_eff_rows(const sgl_roller_t *roller, int item_h)
-{
-    return roller_draw_height(roller, item_h) / item_h;
-}
-
 /** Free dynamic text buffer if owned */
 static void roller_free_dynamic_text(sgl_roller_t *roller)
 {
@@ -68,13 +62,11 @@ static void roller_update_item_count(sgl_roller_t *roller)
 /** Clamp scroll_y so the content stays within bounds */
 static void roller_clamp_scroll(sgl_roller_t *roller, int item_h)
 {
-    const int half = roller_eff_rows(roller, item_h) / 2;
-    /* scroll_y range: selected item must be in [0, item_num-1]
-     * scroll_y = -(selected - half) * item_h
-     * min scroll: when selected = item_num-1 → -(item_num-1-half)*item_h
-     * max scroll: when selected = 0         →  half*item_h              */
-    const int max_scroll = half * item_h;
-    const int min_scroll = -(int)((roller->item_num > 0 ? roller->item_num - 1 : 0) - half) * item_h;
+    /* scroll_y = -idx * item_h, so:
+     * max scroll: idx=0 → scroll_y = 0
+     * min scroll: idx=item_num-1 → scroll_y = -(item_num-1) * item_h */
+    const int max_scroll = 0;
+    const int min_scroll = -(int)(roller->item_num > 0 ? roller->item_num - 1 : 0) * item_h;
 
     if (roller->scroll_y > max_scroll) roller->scroll_y = (int16_t)max_scroll;
     if (roller->scroll_y < min_scroll) roller->scroll_y = (int16_t)min_scroll;
@@ -83,23 +75,25 @@ static void roller_clamp_scroll(sgl_roller_t *roller, int item_h)
 /** Snap scroll_y to the nearest item */
 static void roller_snap(sgl_roller_t *roller, int item_h)
 {
-    /* Nearest item index from current scroll: scroll_y = -(idx - half)*item_h
-     * → idx = half - scroll_y / item_h */
-    const int half = roller_eff_rows(roller, item_h) / 2;
-    int idx = half - (roller->scroll_y + (roller->scroll_y < 0 ? -item_h / 2 : item_h / 2)) / item_h;
+    /* scroll_y = -idx * item_h → idx = round(-scroll_y / item_h) */
+    int idx;
+    if (roller->scroll_y <= 0) {
+        idx = (-roller->scroll_y + item_h / 2) / item_h;
+    } else {
+        idx = (-roller->scroll_y - item_h / 2) / item_h;
+    }
     if (idx < 0) idx = 0;
     if (idx >= (int)roller->item_num) idx = (int)roller->item_num - 1;
 
     roller->item_selected = (int16_t)idx;
     roller->text_offset = (uint16_t)sgl_string_option_get_offset(roller->opt_text, roller->item_selected);
-    roller->scroll_y = (int16_t)(-(idx - half) * item_h);
+    roller->scroll_y = (int16_t)(-idx * item_h);
 }
 
 /** Scroll to make item_selected centered */
 static void roller_scroll_to_selected(sgl_roller_t *roller, int item_h)
 {
-    const int half = roller_eff_rows(roller, item_h) / 2;
-    roller->scroll_y = (int16_t)(-(roller->item_selected - half) * item_h);
+    roller->scroll_y = (int16_t)(-roller->item_selected * item_h);
 }
 
 static void sgl_roller_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_event_t *evt)
@@ -131,12 +125,8 @@ static void sgl_roller_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_event_
         const int draw_y1 = obj->coords.y1;
         const int draw_y2 = draw_y1 + draw_h - 1;
 
-        /* Compute effective visible rows from draw area */
-        const int eff_rows = roller_eff_rows(roller, item_h);
-        const int half = eff_rows / 2;
-
-        /* Selected band (center row) */
-        const int band_y1 = draw_y1 + half * item_h;
+        /* Selected band: vertically centered in draw area */
+        const int band_y1 = draw_y1 + (draw_h - item_h) / 2;
         const int band_y2 = band_y1 + item_h - 1;
         sgl_area_t band_area = {
             .x1 = obj->area.x1, .x2 = obj->area.x2,
@@ -149,10 +139,10 @@ static void sgl_roller_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_event_
         const int font_h = sgl_font_get_height(roller->font);
         const int text_y_off = (item_h - font_h) / 2;
 
-        /* Iterate through all items */
+        /* Items start so that item 0 aligns with band when scroll_y == 0 */
         int item_idx = 0;
         int offset = 0;
-        int16_t item_draw_y = draw_y1 + roller->scroll_y;
+        int16_t item_draw_y = band_y1 + roller->scroll_y;
 
         while (roller->opt_text[offset] != '\0') {
             /* Skip items above visible area */
