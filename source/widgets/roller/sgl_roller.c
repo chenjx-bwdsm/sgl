@@ -122,11 +122,12 @@ static void sgl_roller_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_event_
 
         /* Compute draw area: use widget height, at least 3 rows */
         const int draw_h = roller_draw_height(roller, item_h);
+        const int widget_h = sgl_obj_get_height(obj);
         const int draw_y1 = obj->coords.y1;
         const int draw_y2 = draw_y1 + draw_h - 1;
 
-        /* Selected band: vertically centered in draw area */
-        const int band_y1 = draw_y1 + (draw_h - item_h) / 2;
+        /* Selected band: vertically centered in widget area (not draw area) */
+        const int band_y1 = draw_y1 + (widget_h - item_h) / 2;
         const int band_y2 = band_y1 + item_h - 1;
         sgl_area_t band_area = {
             .x1 = obj->area.x1, .x2 = obj->area.x2,
