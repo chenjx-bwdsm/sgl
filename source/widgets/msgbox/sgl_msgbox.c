@@ -66,13 +66,13 @@ static void sgl_msgbox_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_
 
     sgl_area_t left_coords = {
         .x1 =  obj->coords.x1 + border,
-        .x2 = (obj->coords.x1 + obj->coords.x2) / 2 - border / 2,
+        .x2 = (obj->coords.x1 + obj->coords.x2) / 2 - border / 2 - 1,
         .y1 = obj->coords.y2 - 2 * font_height,
         .y2 = obj->coords.y2 - border,
     };
 
     sgl_area_t right_coords = {
-        .x1 = (obj->coords.x1 + obj->coords.x2) / 2 + border / 2,
+        .x1 = (obj->coords.x1 + obj->coords.x2) / 2 + border / 2 + 1,
         .x2 = obj->coords.x2 - border,
         .y1 = obj->coords.y2 - 2 * font_height,
         .y2 = obj->coords.y2 - border,
