@@ -125,7 +125,6 @@ sgl_obj_t *sgl_launcher_create(sgl_obj_t *parent)
     sgl_obj_set_pos(launcher->statusbar, 0, -22);
     sgl_obj_set_size(launcher->statusbar, SGL_SCREEN_WIDTH, 22);
     sgl_anim_apply_obj_vert(launcher->statusbar, 22, 500, SGL_ANIM_PATH_EASE_OUT_BOUNCE);
-
     return obj;
 }
 
