@@ -78,10 +78,18 @@ static void sgl_launcher_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
         sgl_anim_apply_obj_hori(obj, target - x, 200, SGL_ANIM_PATH_EASE_OUT);
     } break;
 
+    case SGL_EVENT_DESTROYED:
+        sgl_obj_delete(launcher->statusbar);
+    break;
     default: break;
     }
 }
 
+/**
+ * @brief create a launcher object
+ * @param parent parent object
+ * @return launcher object
+ */
 sgl_obj_t *sgl_launcher_create(sgl_obj_t *parent)
 {
     sgl_launcher_t *launcher = sgl_malloc(sizeof(sgl_launcher_t));
@@ -114,19 +122,87 @@ sgl_obj_t *sgl_launcher_create(sgl_obj_t *parent)
         SGL_LOG_ERROR("sgl_launcher_create: statusbar create failed");
         return NULL;
     }
-    sgl_obj_set_pos(launcher->statusbar, 0, -24);
-    sgl_obj_set_size(launcher->statusbar, SGL_SCREEN_WIDTH, 24);
-    sgl_anim_apply_obj_vert(launcher->statusbar, 24, 500, SGL_ANIM_PATH_EASE_OUT_BOUNCE);
+    sgl_obj_set_pos(launcher->statusbar, 0, -22);
+    sgl_obj_set_size(launcher->statusbar, SGL_SCREEN_WIDTH, 22);
+    sgl_anim_apply_obj_vert(launcher->statusbar, 22, 500, SGL_ANIM_PATH_EASE_OUT_BOUNCE);
 
     return obj;
 }
 
+/**
+ * @brief get launcher statusbar
+ * @param launcher the launcher object
+ * @return statusbar object
+ */
+sgl_obj_t* sgl_launcher_statusbar(sgl_obj_t *launcher)
+{
+    sgl_launcher_t *launcher_obj = (sgl_launcher_t *)launcher;
+    return launcher_obj->statusbar;
+}
+
+/**
+ * @brief set launcher font
+ * @param launcher the launcher object
+ * @param font the font
+ * @return none
+ */
 void sgl_launcher_set_font(sgl_obj_t *launcher, const sgl_font_t *font)
 {
     sgl_launcher_t *launcher_obj = (sgl_launcher_t *)launcher;
     launcher_obj->font = font;
 }
 
+/**
+ * @brief set launcher margin
+ * @param launcher the launcher object
+ * @param left left margin
+ * @param top top margin
+ * @param right right margin
+ * @param bottom bottom margin
+ * @return none
+ */
+void sgl_launcher_set_margin(sgl_obj_t *launcher, int16_t left, int16_t top, int16_t right, int16_t bottom)
+{
+    sgl_launcher_t *launcher_obj = (sgl_launcher_t *)launcher;
+    launcher_obj->margin_left = left;
+    launcher_obj->margin_top = top;
+    launcher_obj->margin_right = right;
+    launcher_obj->margin_bottom = bottom;
+    sgl_obj_set_dirty(launcher);
+}
+
+/**
+ * @brief set launcher icon size
+ * @param launcher the launcher object
+ * @param size the icon size
+ * @return none
+ */
+void sgl_launcher_set_icon_size(sgl_obj_t *launcher, int16_t size)
+{
+    sgl_launcher_t *launcher_obj = (sgl_launcher_t *)launcher;
+    launcher_obj->icon_size = size;
+}
+
+/**
+ * @brief set launcher grid size
+ * @param launcher the launcher object
+ * @param cols the number of columns
+ * @param rows the number of rows
+ * @return none
+ */
+void sgl_launcher_set_grid_size(sgl_obj_t *launcher, int16_t cols, int16_t rows)
+{
+    sgl_launcher_t *launcher_obj = (sgl_launcher_t *)launcher;
+    launcher_obj->grid_col = cols;
+    launcher_obj->grid_row = rows;
+}
+
+/**
+ * @brief add an app to launcher
+ * @param launcher the launcher object
+ * @param app the app
+ * @return none
+ */
 void sgl_launcher_add_app(sgl_obj_t *launcher, sgl_launcher_app_t *app)
 {
     sgl_launcher_t *launcher_obj = (sgl_launcher_t *)launcher;
@@ -162,7 +238,7 @@ void sgl_launcher_add_app(sgl_obj_t *launcher, sgl_launcher_app_t *app)
     sgl_obj_set_pos(icon, x + x_ofs, y);
     sgl_obj_set_size(icon, launcher_obj->icon_size, launcher_obj->icon_size);
     sgl_sprite_set_pixmap(icon, app->icon);
-    sgl_obj_set_event_cb(icon, app->launch, app->private_data);
+    sgl_obj_set_event_cb(icon, app->event_cb, app->private_data);
 
     sgl_obj_set_pos(label, x + x_ofs, y + launcher_obj->icon_size + 2);
     sgl_obj_set_size(label, launcher_obj->icon_size, sgl_font_get_height(launcher_obj->font));
@@ -176,10 +252,4 @@ void sgl_launcher_add_app(sgl_obj_t *launcher, sgl_launcher_app_t *app)
     }
 
     launcher_obj->count++;
-}
-
-sgl_obj_t* sgl_launcher_statusbar(sgl_obj_t *launcher)
-{
-    sgl_launcher_t *launcher_obj = (sgl_launcher_t *)launcher;
-    return launcher_obj->statusbar;
 }
