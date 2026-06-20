@@ -110,7 +110,7 @@ static void sgl_msgbox_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_
                             msgbox->alpha
                            );
 
-        sgl_draw_string_mult_line(surf, &text_coords, text_coords.x1, text_coords.y1, msgbox->msg_text, msgbox->msg_color, msgbox->alpha, font, msgbox->msg_line_margin);
+        sgl_draw_string_mult_line(surf, &text_coords, text_coords.x1, text_coords.y1 + 2, msgbox->msg_text, msgbox->msg_color, msgbox->alpha, font, msgbox->msg_line_margin);
 
         if(msgbox->status & SGL_MSGBOX_STATUS_LEFT) {
             tmp_color = msgbox->lbtn_color;
