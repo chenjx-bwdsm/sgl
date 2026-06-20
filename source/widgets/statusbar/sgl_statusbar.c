@@ -66,6 +66,10 @@ static void sgl_statusbar_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_eve
     case SGL_EVENT_DRAW_MAIN:
         sgl_draw_fill_rect(surf, &obj->area, &obj->coords, obj->radius, bar->bg_color, bar->bg_alpha);
 
+        if (unlikely(!bar->font)) {
+            return;
+        }
+
         pos_y = obj->coords.y1 + (sgl_obj_get_height(obj) - bar->font->font_height) / 2;
         pos_x = obj->coords.x1 + bar->left_margin;
 
@@ -183,6 +187,7 @@ void sgl_statusbar_add_left_slot(sgl_obj_t *obj, uint8_t index, char* slot)
         }
         bar->slot_left[index].slot = slot;
         bar->slot_left[index].alpha = SGL_ALPHA_MAX;
+        bar->slot_left[index].color = SGL_COLOR_WHITE;
         sgl_obj_set_dirty(obj);
     }
 }
@@ -202,6 +207,7 @@ void sgl_statusbar_add_right_slot(sgl_obj_t *obj, uint8_t index, char* slot)
         }
         bar->slot_right[index].slot = slot;
         bar->slot_right[index].alpha = SGL_ALPHA_MAX;
+        bar->slot_right[index].color = SGL_COLOR_WHITE;
         sgl_obj_set_dirty(obj);
     }
 }

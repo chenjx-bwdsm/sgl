@@ -1272,6 +1272,7 @@ static inline void sgl_obj_set_movable(sgl_obj_t *obj)
 {
     SGL_ASSERT(obj != NULL);
     obj->movable = 1;
+    obj->clickable = 1;
 }
 
 /**

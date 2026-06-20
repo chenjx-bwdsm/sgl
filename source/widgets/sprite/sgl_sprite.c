@@ -139,7 +139,7 @@ void sgl_sprite_set_alpha(sgl_obj_t *obj, uint8_t alpha)
  * @param pixmap pixmap of the sprite
  * @return none
  */
-void sgl_sprite_set_pixmap(sgl_obj_t *obj, sgl_pixmap_t *pixmap)
+void sgl_sprite_set_pixmap(sgl_obj_t *obj, const sgl_pixmap_t *pixmap)
 {
     sgl_sprite_t *sprite = sgl_container_of(obj, sgl_sprite_t, obj);
     sprite->pixmap = pixmap;

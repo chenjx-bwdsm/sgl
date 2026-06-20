@@ -71,6 +71,7 @@
 #include "widgets/analogclock/sgl_analogclock.h"
 #include "widgets/statusbar/sgl_statusbar.h"
 #include "widgets/roller/sgl_roller.h"
+#include "widgets/launcher/sgl_launcher.h"
 #include "components/timer/sgl_timer.h"
 #include "components/3dvortex/sgl_3dvortex.h"
 

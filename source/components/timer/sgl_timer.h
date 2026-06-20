@@ -27,7 +27,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "sgl_core.h"
+#include <sgl_core.h>
 
 #define SGL_TIMER_SHORT_SLOT                  (128U)
 #define SGL_TIMER_LONG_SLOT                   (16U)
