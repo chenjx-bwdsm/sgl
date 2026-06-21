@@ -18,8 +18,11 @@ typedef struct sgl_launcher {
     int16_t grid_col;
     int16_t page_width;
     int16_t page_height;
+    int16_t drag_start_x;
     uint8_t count;
     uint8_t page_count;
+    sgl_color_t navigbar_color;
+    sgl_color_t label_color;
     const sgl_font_t *font;
     sgl_obj_t *statusbar;
 } sgl_launcher_t;
@@ -88,6 +91,22 @@ void sgl_launcher_set_grid_size(sgl_obj_t *launcher, int16_t cols, int16_t rows)
  * @return none
  */
 void sgl_launcher_add_app(sgl_obj_t *launcher, sgl_launcher_app_t *app);
+
+/**
+ * @brief set launcher label color
+ * @param launcher the launcher object
+ * @param color the label color
+ * @return none
+ */
+void sgl_launcher_set_label_color(sgl_obj_t *launcher, sgl_color_t color);
+
+/**
+ * @brief set launcher navigation bar color
+ * @param launcher the launcher object
+ * @param color the navigation bar color
+ * @return none
+ */
+void sgl_launcher_set_navigbar_color(sgl_obj_t *launcher, sgl_color_t color);
 
 #ifdef __cplusplus
 }

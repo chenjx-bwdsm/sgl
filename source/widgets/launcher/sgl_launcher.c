@@ -45,11 +45,16 @@ static void sgl_launcher_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
             for (int16_t i = 0; i < n; i++) {
                 int16_t cx = cx0 + i * spacing;
                 int16_t r  = (i == cur_page) ? dot_r + 1 : dot_r;
-                sgl_color_t color = (i == cur_page) ? SGL_COLOR_WHEAT : SGL_COLOR_GRAY;
+                sgl_color_t color = (i == cur_page) ? sgl_color_mixer(launcher->navigbar_color, SGL_COLOR_WHITE, 128) 
+                                                    : launcher->navigbar_color;
                 sgl_draw_fill_circle(surf, &obj->parent->area, cx, cy, r, color, SGL_ALPHA_MAX);
             }
         }
         break;
+    case SGL_EVENT_PRESSED:
+        launcher->drag_start_x = obj->coords.x1;
+    break;
+
     case SGL_EVENT_MOVE_LEFT:
         sgl_obj_set_pos_x(obj, obj->coords.x1 - evt->distance);
     break;
@@ -59,22 +64,25 @@ static void sgl_launcher_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
     break;
 
     case SGL_EVENT_RELEASED: {
-        sgl_launcher_t *launcher = (sgl_launcher_t *)obj;
-        int16_t single_w = width / launcher->page_count;
-        int16_t x = obj->coords.x1;
-        int16_t target;
+        int16_t threshold = SGL_SCREEN_WIDTH / 16;
+        int16_t single_w  = width / launcher->page_count;
+        int16_t x         = obj->coords.x1;
+        int16_t delta     = x - launcher->drag_start_x;
 
-        if (x >= 0) {
-            target = 0;
-        } else {
-            int16_t abs_x  = -x;
-            int16_t page   = (abs_x + single_w / 2) / single_w;
-            int16_t max_pg = launcher->page_count - 1;
-
-            if (page > max_pg) page = max_pg;
-            target = -(page * single_w);
+        /* Determine the page we were on when drag started */
+        int16_t cur_page = 0;
+        if (launcher->drag_start_x < 0) {
+            cur_page = (-launcher->drag_start_x + single_w / 2) / single_w;
+            if (cur_page >= launcher->page_count) cur_page = launcher->page_count - 1;
         }
 
+        int16_t target_page = cur_page;
+        if (delta < -threshold && target_page < launcher->page_count - 1)
+            target_page++;
+        else if (delta > threshold && target_page > 0)
+            target_page--;
+
+        int16_t target = -(target_page * single_w);
         sgl_anim_apply_obj_hori(obj, target - x, 200, SGL_ANIM_PATH_EASE_OUT);
     } break;
 
@@ -115,6 +123,7 @@ sgl_obj_t *sgl_launcher_create(sgl_obj_t *parent)
     launcher->page_count = 1;
     launcher->page_width = SGL_SCREEN_WIDTH;
     launcher->page_height = SGL_SCREEN_HEIGHT;
+    launcher->navigbar_color = SGL_COLOR_WHEAT;
     launcher->font = sgl_get_system_font();
 
     launcher->statusbar = sgl_statusbar_create(NULL);
@@ -243,6 +252,7 @@ void sgl_launcher_add_app(sgl_obj_t *launcher, sgl_launcher_app_t *app)
     sgl_obj_set_size(label, launcher_obj->icon_size, sgl_font_get_height(launcher_obj->font));
     sgl_label_set_text(label, app->name);
     sgl_label_set_font(label, launcher_obj->font);
+    sgl_label_set_text_color(label, launcher_obj->label_color);
 
     if (page_index >= launcher_obj->page_count) {
         launcher_obj->page_count ++;
@@ -251,4 +261,28 @@ void sgl_launcher_add_app(sgl_obj_t *launcher, sgl_launcher_app_t *app)
     }
 
     launcher_obj->count++;
+}
+
+/**
+ * @brief set launcher label color
+ * @param launcher the launcher object
+ * @param color the label color
+ * @return none
+ */
+void sgl_launcher_set_label_color(sgl_obj_t *launcher, sgl_color_t color)
+{
+    sgl_launcher_t *launcher_obj = (sgl_launcher_t *)launcher;
+    launcher_obj->label_color = color;
+}
+
+/**
+ * @brief set launcher navigation bar color
+ * @param launcher the launcher object
+ * @param color the navigation bar color
+ * @return none
+ */
+void sgl_launcher_set_navigbar_color(sgl_obj_t *launcher, sgl_color_t color)
+{
+    sgl_launcher_t *launcher_obj = (sgl_launcher_t *)launcher;
+    launcher_obj->navigbar_color = color;
 }
