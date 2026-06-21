@@ -19,7 +19,6 @@ static int16_t launcher_item_pos(int16_t offset, int16_t total_len,
 static void sgl_launcher_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t *evt)
 {
     sgl_launcher_t *launcher = (sgl_launcher_t *)obj;
-    const int16_t width = sgl_obj_get_width(obj);
     if (!launcher->page_count) {
         return;
     }
@@ -44,7 +43,7 @@ static void sgl_launcher_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
         }
         break;
     case SGL_EVENT_PRESSED:
-        launcher->drag_start_x = obj->coords.x1;
+        launcher->drag_start_x = evt->pos.x;
     break;
 
     case SGL_EVENT_MOVE_LEFT:
@@ -57,26 +56,20 @@ static void sgl_launcher_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
 
     case SGL_EVENT_RELEASED: {
         int16_t threshold = SGL_SCREEN_WIDTH / 16;
-        int16_t single_w  = width / launcher->page_count;
-        int16_t x         = obj->coords.x1;
-        int16_t delta     = x - launcher->drag_start_x;
+        int16_t delta     = evt->pos.x - launcher->drag_start_x;
+        int16_t target_page = launcher->current_page;
 
-        /* Determine the page we were on when drag started */
-        int16_t cur_page = 0;
-        if (launcher->drag_start_x < 0) {
-            cur_page = (-launcher->drag_start_x + single_w / 2) / single_w;
-            if (cur_page >= launcher->page_count) cur_page = launcher->page_count - 1;
+        if (sgl_abs(delta) > threshold) {
+            if (delta < 0)
+                target_page++;
+            else
+                target_page--;
         }
 
-        int16_t target_page = cur_page;
-        if (delta < -threshold && target_page < launcher->page_count - 1)
-            target_page++;
-        else if (delta > threshold && target_page > 0)
-            target_page--;
-
+        target_page = sgl_clamp(target_page, 0, launcher->page_count - 1);
         launcher->current_page = target_page;
-        int16_t target = -(target_page * single_w);
-        sgl_anim_apply_obj_hori(obj, target - x, 200, SGL_ANIM_PATH_EASE_OUT);
+        int16_t target = -(target_page * launcher->page_width) - obj->coords.x1;
+        sgl_anim_apply_obj_hori(obj, target, 200, SGL_ANIM_PATH_EASE_OUT);
     } break;
 
     case SGL_EVENT_DESTROYED:

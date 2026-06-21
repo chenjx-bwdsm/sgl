@@ -82,13 +82,13 @@ typedef struct {
     uint32_t data_head;        /* first data block (0=none) */
     uint32_t data_count;       /* number of data blocks */
     uint32_t parent_inode;     /* parent directory inode index */
-} __attribute__((packed)) slfs_inode_t;
+} sgl_packed slfs_inode_t;
 
 /* Data block header - first bytes of each data block */
 typedef struct {
     uint32_t next_block;       /* next data block in chain (0=end) */
     uint32_t used_bytes;       /* bytes used in this block's data area */
-} __attribute__((packed)) slfs_data_hdr_t;
+} sgl_packed slfs_data_hdr_t;
 
 /* Directory entry - stored sequentially in directory data blocks */
 typedef struct {
@@ -96,7 +96,7 @@ typedef struct {
     uint8_t  type;             /* 1=file, 2=dir */
     uint32_t inode;            /* inode index */
     /* followed by name_len bytes of name (no null terminator on disk) */
-} __attribute__((packed)) slfs_dirent_t;
+} sgl_packed slfs_dirent_t;
 
 /* ===================== In-Memory Structures ===================== */
 

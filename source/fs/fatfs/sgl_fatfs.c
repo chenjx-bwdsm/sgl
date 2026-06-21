@@ -82,7 +82,7 @@ typedef struct {
     uint16_t wrt_date;
     uint16_t fst_clus_lo;
     uint32_t file_size;
-} __attribute__((packed)) fat_dir_entry_t;
+} sgl_packed fat_dir_entry_t;
 
 typedef struct {
     uint8_t  used;

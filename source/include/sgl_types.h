@@ -125,6 +125,8 @@ extern "C" {
 #endif
 #define sgl_weak_fn                             __attribute__((weak))
 #define sgl_section(sec)                        __attribute__((section(#sec)))
+#define sgl_packed                              __attribute__((packed))
+#define sgl_align(x)                            __attribute__((aligned(x)))
 #elif defined(__clang__)   /* clang compiler */
 #ifndef likely
 #  define likely(x)                             __builtin_expect(!!(x), 1)
@@ -132,6 +134,8 @@ extern "C" {
 #endif
 #define sgl_weak_fn                             __attribute__((weak))
 #define sgl_section(sec)                        __attribute__((section(#sec)))
+#define sgl_packed                              __attribute__((packed))
+#define sgl_align(x)                            __attribute__((aligned(x)))
 #elif defined(__CC_ARM)    /* RealView compiler (Keil ARMCC) */
 #ifndef likely
 #  define likely(x)                             __builtin_expect(!!(x), 1)
@@ -139,6 +143,8 @@ extern "C" {
 #endif
 #define sgl_weak_fn                             __weak
 #define sgl_section(sec)                        __attribute__((section(#sec)))
+#define sgl_packed                              __attribute__((packed))
+#define sgl_align(x)                            __attribute__((aligned(x)))
 #elif defined(__ICCARM__)  /* IAR compiler    */
 #ifndef likely
 #  if __VER__ >= 9100000
@@ -151,12 +157,16 @@ extern "C" {
 #endif
 #define sgl_weak_fn                             __weak
 #define sgl_section(sec)                        __section(#sec)
+#define sgl_packed                              __packed
+#define sgl_align(x)                            _Pragma("data_alignment=" #x)
 #elif defined(_MSC_VER)    /* MSVC compiler   */
 #ifndef likely
 #  define likely(x)                             (x)
 #  define unlikely(x)                           (x)
 #endif
 #define sgl_weak_fn                             __declspec(selectany)
+#define sgl_packed
+#define sgl_align(x)                            __declspec(align(x))
 #elif defined(__MINGW32__) /* MinGW compiler  */
 #ifndef likely
 #  define likely(x)                             __builtin_expect(!!(x), 1)
@@ -164,11 +174,15 @@ extern "C" {
 #endif
 #define sgl_weak_fn                             __attribute__((weak))
 #define sgl_section(sec)                        __attribute__((section(#sec)))
+#define sgl_packed                              __attribute__((packed))
+#define sgl_align(x)                            __attribute__((aligned(x)))
 #else                      /* others compiler */
 #ifndef likely
 #  define likely(x)                             (x)
 #  define unlikely(x)                           (x)
 #endif
+#define sgl_packed
+#define sgl_align(x)
 #warning "Weak linkage not supported for this compiler"                    
 #endif
 
