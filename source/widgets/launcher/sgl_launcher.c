@@ -18,8 +18,6 @@ static int16_t launcher_item_pos(int16_t offset, int16_t total_len,
 
 static void sgl_launcher_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t *evt)
 {
-    SGL_UNUSED(surf);
-    SGL_UNUSED(evt);
     sgl_launcher_t *launcher = (sgl_launcher_t *)obj;
     const int16_t width = sgl_obj_get_width(obj);
     if (!launcher->page_count) {
@@ -304,4 +302,6 @@ void sgl_launcher_set_current_page(sgl_obj_t *launcher, int16_t page)
     sgl_launcher_t *launcher_obj = (sgl_launcher_t *)launcher;
     if (page < 0 || page >= launcher_obj->page_count) return;
     launcher_obj->current_page = page;
+    sgl_obj_set_pos_x(launcher, - (page * launcher_obj->page_width));
+    sgl_obj_set_dirty(launcher);
 }
