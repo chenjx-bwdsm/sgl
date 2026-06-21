@@ -21,6 +21,7 @@ typedef struct sgl_launcher {
     int16_t drag_start_x;
     uint8_t count;
     uint8_t page_count;
+    uint8_t current_page;
     sgl_color_t navigbar_color;
     sgl_color_t label_color;
     const sgl_font_t *font;
@@ -107,6 +108,21 @@ void sgl_launcher_set_label_color(sgl_obj_t *launcher, sgl_color_t color);
  * @return none
  */
 void sgl_launcher_set_navigbar_color(sgl_obj_t *launcher, sgl_color_t color);
+
+/**
+ * @brief get launcher current page
+ * @param launcher the launcher object
+ * @return current page
+ */
+int16_t sgl_launcher_get_current_page(sgl_obj_t *launcher);
+
+/**
+ * @brief set launcher current page
+ * @param launcher the launcher object
+ * @param page the page to set
+ * @return none
+ */
+void sgl_launcher_set_current_page(sgl_obj_t *launcher, int16_t page);
 
 #ifdef __cplusplus
 }

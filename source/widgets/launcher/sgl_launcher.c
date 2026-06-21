@@ -32,15 +32,9 @@ static void sgl_launcher_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
             const int16_t dot_r   = 4;
             const int16_t spacing = 20;  /* center-to-center */
             int16_t n       = launcher->page_count;
-            int16_t single_w = width / n;
             int16_t cy      = SGL_SCREEN_HEIGHT - 20;
             int16_t cx0     = (SGL_SCREEN_WIDTH - (n - 1) * spacing) / 2;
-
-            int16_t cur_page = 0;
-            if (single_w > 0 && obj->coords.x1 < 0) {
-                cur_page = (-obj->coords.x1 + single_w / 2) / single_w;
-                if (cur_page >= n) cur_page = n - 1;
-            }
+            int16_t cur_page = launcher->current_page;
 
             for (int16_t i = 0; i < n; i++) {
                 int16_t cx = cx0 + i * spacing;
@@ -82,6 +76,7 @@ static void sgl_launcher_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
         else if (delta > threshold && target_page > 0)
             target_page--;
 
+        launcher->current_page = target_page;
         int16_t target = -(target_page * single_w);
         sgl_anim_apply_obj_hori(obj, target - x, 200, SGL_ANIM_PATH_EASE_OUT);
     } break;
@@ -285,4 +280,28 @@ void sgl_launcher_set_navigbar_color(sgl_obj_t *launcher, sgl_color_t color)
 {
     sgl_launcher_t *launcher_obj = (sgl_launcher_t *)launcher;
     launcher_obj->navigbar_color = color;
+}
+
+/**
+ * @brief get launcher current page
+ * @param launcher the launcher object
+ * @return current page
+ */
+int16_t sgl_launcher_get_current_page(sgl_obj_t *launcher)
+{
+    sgl_launcher_t *launcher_obj = (sgl_launcher_t *)launcher;   
+    return launcher_obj->current_page;
+}
+
+/**
+ * @brief set launcher current page
+ * @param launcher the launcher object
+ * @param page the page to set
+ * @return none
+ */
+void sgl_launcher_set_current_page(sgl_obj_t *launcher, int16_t page)
+{
+    sgl_launcher_t *launcher_obj = (sgl_launcher_t *)launcher;
+    if (page < 0 || page >= launcher_obj->page_count) return;
+    launcher_obj->current_page = page;
 }
