@@ -578,6 +578,7 @@ void sgl_page_set_color(sgl_obj_t* obj, sgl_color_t color)
 {
     sgl_page_t* page = (sgl_page_t*)obj;
     page->color = color;
+    page->pixmap = NULL;
     sgl_obj_set_dirty(obj);
 }
 
