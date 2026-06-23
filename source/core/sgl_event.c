@@ -308,7 +308,7 @@ static void sgl_get_move_info(sgl_event_t *evt)
 static inline void event_callback(sgl_obj_t *obj, sgl_event_t *evt)
 {
     SGL_ASSERT(obj->construct_fn);
-    evt->param = obj->event_data;
+    evt->event_data = obj->event_data;
     evt->obj = obj;
     obj->construct_fn(NULL, obj, evt);
 }
@@ -534,7 +534,7 @@ static void event_set_focus(struct sgl_obj *obj, bool flag)
  */
 static void event_type_callback(struct sgl_obj *obj, sgl_event_t *evt, sgl_event_type_t type)
 {
-    evt->param = obj->event_data;
+    evt->event_data = obj->event_data;
     evt->type = type;
     evt->obj = obj;
     evt->pos.x = SGL_POS_MIN;

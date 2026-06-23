@@ -87,9 +87,18 @@ typedef struct sgl_event_pos {
     int16_t y;
 } sgl_event_pos_t;
 
+/**
+ * @brief Event structure, Used to represent an event, such as click, long press, etc.
+ *
+ * @obj: The object that triggered the event
+ * @event_data: The private data of the event
+ * @pos: The position of the event
+ * @type: The type of the event
+ * @distance: The move distance of the event
+ */
 typedef struct sgl_event {
     struct sgl_obj   *obj;
-    void             *param;
+    void             *event_data;
     sgl_event_pos_t  pos;
     uint16_t         type;
     uint16_t         distance;
@@ -128,7 +137,7 @@ static inline struct sgl_obj* sgl_event_get_target(sgl_event_t *event)
  */
 static inline void* sgl_event_get_data(sgl_event_t *event)
 {
-    return event->param;
+    return event->event_data;
 }
 
 /**

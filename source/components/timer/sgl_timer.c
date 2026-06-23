@@ -22,10 +22,10 @@
  * SOFTWARE.
  */
 
-#include "sgl_timer.h"
-#include "sgl_mm.h"
-#include "sgl_log.h"
+#include <sgl_mm.h>
+#include <sgl_log.h>
 #include <string.h>
+#include "sgl_timer.h"
 
 #define SGL_SHORT_WHEEL_INIT(idx) { .next = &short_wheel[idx], .prev = &short_wheel[idx] }
 #define SGL_LONG_WHEEL_INIT(idx)  { .next = &long_wheel[idx],  .prev = &long_wheel[idx] }

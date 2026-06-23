@@ -38,7 +38,7 @@
  * 
  * void textlist_click_cb(sgl_event_t *event)
  * {
- *     sgl_textlist_t *textlist = (sgl_textlist_t *)event->param;
+ *     sgl_textlist_t *textlist = (sgl_textlist_t *)event->event_data;
  *     if (event->type == SGL_EVENT_CLICKED) {
  *         SGL_LOG_INFO("Clicked %s", sgl_textlist_get_selected_text(textlist));
  *     }

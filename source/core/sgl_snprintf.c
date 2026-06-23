@@ -325,7 +325,6 @@ int sgl_snprintf(char *buf, size_t size, const char *fmt, ...)
     return ret;
 }
 
-
 /**
  * @brief format a string, a simple version of sprintf (with width alignment support)
  * @param buf buffer

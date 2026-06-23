@@ -40,7 +40,7 @@
  * 
  *   void viewlist_click_cb(sgl_event_t *event)
  *   {
- *       sgl_obj_t *label = (sgl_obj_t *)event->param;
+ *       sgl_obj_t *label = (sgl_obj_t *)event->event_data;
  *       if (event->type == SGL_EVENT_CLICKED) {
  *           SGL_LOG_INFO("Clicked: %s", sgl_label_get_text(label));
  *       }
