@@ -1,0 +1,514 @@
+/* source/widgets/sgl_img_ext/sgl_img_ext.c
+ *
+ * MIT License
+ *
+ * Copyright(c) 2023-present All contributors of SGL  
+ * Document reference link: https://sgl-docs.readthedocs.io
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+#include <sgl_core.h>
+#include <sgl_draw.h>
+#include <sgl_math.h>
+#include <sgl_log.h>
+#include <sgl_mm.h>
+#include <sgl_theme.h>
+#include <sgl_cfgfix.h>
+#include <string.h>
+#include "sgl_img_ext.h"
+
+/**
+ * Decode a single pixel from the pixmap buffer.
+ * Returns the decoded color and writes per-pixel opacity to *out_opa
+ * (SGL_ALPHA_MAX for opaque formats).
+ */
+static inline sgl_color_t decode_pixel(const sgl_pixmap_t *pixmap, const uint8_t *buf, size_t offset, uint8_t *out_opa)
+{
+    uint16_t pv;
+    *out_opa = SGL_ALPHA_MAX;
+
+    switch (pixmap->format) {
+    case SGL_PIXMAP_FMT_RGB332:
+        return sgl_rgb332_to_color(buf[offset]);
+    case SGL_PIXMAP_FMT_RGB565:
+        pv = buf[offset] | (buf[offset + 1] << 8);
+        return sgl_rgb565_to_color(pv);
+    case SGL_PIXMAP_FMT_ARGB2222:
+        pv = buf[offset];
+        *out_opa = sgl_opa2_table[pv >> 6];
+        return sgl_rgb222_to_color(pv);
+    case SGL_PIXMAP_FMT_ARGB4444:
+        pv = buf[offset] | (buf[offset + 1] << 8);
+        *out_opa = sgl_opa4_table[pv >> 12];
+        return sgl_rgb444_to_color(pv);
+    case SGL_PIXMAP_FMT_RGB888:
+        pv = buf[offset] | (buf[offset + 1] << 8) | (buf[offset + 2] << 16);
+        return sgl_rgb888_to_color(pv);
+    case SGL_PIXMAP_FMT_ARGB8888:
+        pv = buf[offset] | (buf[offset + 1] << 8) | (buf[offset + 2] << 16);
+        *out_opa = buf[offset + 3];
+        return sgl_rgb888_to_color(pv);
+    default:
+        return (sgl_color_t){0};
+    }
+}
+
+/**
+ * Blend a decoded pixel onto the destination, applying per-pixel and
+ * global alpha as needed.
+ */
+static inline void blend_pixel(sgl_color_t *dst, sgl_color_t src, uint8_t pix_opa, uint8_t global_alpha)
+{
+    if (pix_opa != SGL_ALPHA_MAX) {
+        src = sgl_color_mixer(src, *dst, pix_opa);
+    }
+    *dst = (global_alpha == SGL_ALPHA_MAX) ? src : sgl_color_mixer(src, *dst, global_alpha);
+}
+
+#if (CONFIG_SGL_IMG_EXT_BILN)
+/**
+ * @brief Bilinear interpolation on raw pixmap data.
+ * Decodes a 2x2 pixel neighborhood and interpolates using fixed-point
+ * fractional coordinates, matching the logic of sgl_draw_biln_color.
+ *
+ * @param pixmap  Source pixmap descriptor
+ * @param buf     Pixmap pixel buffer
+ * @param fx      X coordinate in fixed-point (SGL_FIXED_SHIFT fraction bits)
+ * @param fy      Y coordinate in fixed-point (SGL_FIXED_SHIFT fraction bits)
+ * @param out_opa Pointer to receive the interpolated per-pixel opacity
+ * @return Interpolated color
+ */
+static inline sgl_color_t pixmap_biln_color(const sgl_pixmap_t *pixmap,
+                                             const uint8_t *buf,
+                                             int32_t fx, int32_t fy,
+                                             uint8_t *out_opa)
+{
+    int32_t w = (int32_t)pixmap->width;
+    int32_t h = (int32_t)pixmap->height;
+
+    /* Clamp to valid interpolation range [0, (w-1)<<SHIFT] */
+    int32_t max_x = (w - 1) << SGL_FIXED_SHIFT;
+    int32_t max_y = (h - 1) << SGL_FIXED_SHIFT;
+    fx = (fx < 0) ? 0 : (fx > max_x) ? max_x : fx;
+    fy = (fy < 0) ? 0 : (fy > max_y) ? max_y : fy;
+
+    int32_t x0 = fx >> SGL_FIXED_SHIFT;
+    int32_t y0 = fy >> SGL_FIXED_SHIFT;
+    int32_t dx = fx & SGL_FIXED_MASK;
+    int32_t dy = fy & SGL_FIXED_MASK;
+    int32_t dx1 = SGL_FIXED_ONE - dx;
+    int32_t dy1 = SGL_FIXED_ONE - dy;
+
+    uint8_t pix_byte = sgl_pixmal_get_pixel_bytes(pixmap);
+
+    /* Offsets for the 2x2 neighborhood */
+    size_t off00 = ((size_t)y0 * w + x0) * pix_byte;
+    size_t off01 = off00 + pix_byte;
+    size_t off10 = off00 + (size_t)w * pix_byte;
+    size_t off11 = off10 + pix_byte;
+
+    uint8_t opa00, opa01, opa10, opa11;
+    sgl_color_t p00 = decode_pixel(pixmap, buf, off00, &opa00);
+    sgl_color_t p01 = decode_pixel(pixmap, buf, off01, &opa01);
+    sgl_color_t p10 = decode_pixel(pixmap, buf, off10, &opa10);
+    sgl_color_t p11 = decode_pixel(pixmap, buf, off11, &opa11);
+
+    sgl_color_t ret;
+
+    /* Interpolate R channel */
+    int32_t r_y0 = (p00.ch.red * dx1 + p01.ch.red * dx) >> SGL_FIXED_SHIFT;
+    int32_t r_y1 = (p10.ch.red * dx1 + p11.ch.red * dx) >> SGL_FIXED_SHIFT;
+    ret.ch.red = (r_y0 * dy1 + r_y1 * dy) >> SGL_FIXED_SHIFT;
+
+    /* Interpolate G channel */
+    int32_t g_y0 = (p00.ch.green * dx1 + p01.ch.green * dx) >> SGL_FIXED_SHIFT;
+    int32_t g_y1 = (p10.ch.green * dx1 + p11.ch.green * dx) >> SGL_FIXED_SHIFT;
+    ret.ch.green = (g_y0 * dy1 + g_y1 * dy) >> SGL_FIXED_SHIFT;
+
+    /* Interpolate B channel */
+    int32_t b_y0 = (p00.ch.blue * dx1 + p01.ch.blue * dx) >> SGL_FIXED_SHIFT;
+    int32_t b_y1 = (p10.ch.blue * dx1 + p11.ch.blue * dx) >> SGL_FIXED_SHIFT;
+    ret.ch.blue = (b_y0 * dy1 + b_y1 * dy) >> SGL_FIXED_SHIFT;
+
+    /* Interpolate per-pixel alpha */
+    int32_t a_y0 = (opa00 * dx1 + opa01 * dx) >> SGL_FIXED_SHIFT;
+    int32_t a_y1 = (opa10 * dx1 + opa11 * dx) >> SGL_FIXED_SHIFT;
+    *out_opa = (a_y0 * dy1 + a_y1 * dy) >> SGL_FIXED_SHIFT;
+
+    return ret;
+}
+#endif /* CONFIG_SGL_IMG_EXT_BILN */
+
+/**
+ * @brief Recompute obj->coords to the axis-aligned bounding box of the
+ *        rotated + scaled image, preserving the widget center.
+ *        Must be called after any change to rotation, scale, or pixmap.
+ */
+static void img_ext_update_coords(sgl_img_ext_t *img_ext)
+{
+    sgl_obj_t *obj = &img_ext->obj;
+
+    if (!img_ext->pixmap) {
+        return;
+    }
+
+    /* No transform: keep coords as-is */
+    if (img_ext->rotation == 0 &&
+        img_ext->scale_x == SGL_FIXED_ONE &&
+        img_ext->scale_y == SGL_FIXED_ONE) {
+        return;
+    }
+
+    const sgl_pixmap_t *pixmap = img_ext->pixmap;
+    int32_t center_x = (obj->coords.x1 + obj->coords.x2) / 2;
+    int32_t center_y = (obj->coords.y1 + obj->coords.y2) / 2;
+
+    /* Scaled dimensions */
+    int32_t scaled_w = ((int32_t)pixmap->width  * img_ext->scale_x + SGL_FIXED_ONE - 1) >> SGL_FIXED_SHIFT;
+    int32_t scaled_h = ((int32_t)pixmap->height * img_ext->scale_y + SGL_FIXED_ONE - 1) >> SGL_FIXED_SHIFT;
+    if (scaled_w <= 0) scaled_w = pixmap->width;
+    if (scaled_h <= 0) scaled_h = pixmap->height;
+
+    int16_t rotation = sgl_mod360(img_ext->rotation);
+    int32_t sin_val = sgl_sin(rotation);
+    int32_t cos_val = sgl_cos(rotation);
+
+    int32_t hw = scaled_w / 2;
+    int32_t hh = scaled_h / 2;
+
+    /* Rotate 4 corners around center */
+    int32_t rx1 = (cos_val * (-hw) - sin_val * (-hh)) / SGL_SIN_FIXED_ONE;
+    int32_t ry1 = (sin_val * (-hw) + cos_val * (-hh)) / SGL_SIN_FIXED_ONE;
+    int32_t rx2 = (cos_val * ( hw) - sin_val * (-hh)) / SGL_SIN_FIXED_ONE;
+    int32_t ry2 = (sin_val * ( hw) + cos_val * (-hh)) / SGL_SIN_FIXED_ONE;
+    int32_t rx3 = (cos_val * ( hw) - sin_val * ( hh)) / SGL_SIN_FIXED_ONE;
+    int32_t ry3 = (sin_val * ( hw) + cos_val * ( hh)) / SGL_SIN_FIXED_ONE;
+    int32_t rx4 = (cos_val * (-hw) - sin_val * ( hh)) / SGL_SIN_FIXED_ONE;
+    int32_t ry4 = (sin_val * (-hw) + cos_val * ( hh)) / SGL_SIN_FIXED_ONE;
+
+    obj->coords.x1 = center_x + sgl_min4(rx1, rx2, rx3, rx4);
+    obj->coords.y1 = center_y + sgl_min4(ry1, ry2, ry3, ry4);
+    obj->coords.x2 = center_x + sgl_max4(rx1, rx2, rx3, rx4);
+    obj->coords.y2 = center_y + sgl_max4(ry1, ry2, ry3, ry4);
+}
+
+/**
+ * @brief Construct callback for the image extension widget.
+ * Handles two rendering paths:
+ *   1. Simple blit when no rotation and no scaling (1:1 copy).
+ *   2. Inverse-transform path for arbitrary rotation + scaling.
+ */
+static void sgl_img_ext_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t *evt)
+{
+    sgl_img_ext_t *img_ext = sgl_container_of(obj, sgl_img_ext_t, obj);
+    if (!img_ext->pixmap) {
+        return;
+    }
+    const sgl_pixmap_t *pixmap = img_ext->pixmap;
+    uint8_t pix_byte = sgl_pixmal_get_pixel_bytes(pixmap);
+    uint8_t *pixmap_buf = (uint8_t*)pixmap->bitmap.array;
+
+    switch (evt->type) {
+    case SGL_EVENT_DRAW_MAIN: {
+        /* Simple draw mode: no rotation, no scaling (centered on widget) */
+        if (img_ext->rotation == 0 && img_ext->scale_x == SGL_FIXED_ONE && img_ext->scale_y == SGL_FIXED_ONE) {
+            /* Compute draw area centered on the widget */
+            int32_t center_x = (obj->coords.x1 + obj->coords.x2) / 2;
+            int32_t center_y = (obj->coords.y1 + obj->coords.y2) / 2;
+            int32_t start_x = center_x - pixmap->width / 2;
+            int32_t start_y = center_y - pixmap->height / 2;
+
+            sgl_area_t clip = SGL_AREA_INVALID;
+            sgl_area_t area = {
+                .x1 = start_x,
+                .y1 = start_y,
+                .x2 = start_x + pixmap->width - 1,
+                .y2 = start_y + pixmap->height - 1,
+            };
+
+            if (!sgl_surf_clip(surf, &area, &clip)) {
+                return;
+            }
+
+            if (img_ext->read != NULL && img_ext->flash_buffer != NULL) {
+                img_ext->flash_buffer = (uint8_t*)sgl_malloc(pix_byte * (clip.x2 - clip.x1 + 1));
+                pixmap_buf = img_ext->flash_buffer;
+            }
+
+            sgl_color_t *buf = sgl_surf_get_buf(surf, clip.x1 - surf->x1, clip.y1 - surf->y1);
+
+            for (int y = clip.y1; y <= clip.y2; y++) {
+                sgl_color_t *blend = buf;
+                size_t offset = ((((y - area.y1) * pixmap->width) + (clip.x1 - area.x1)) * pix_byte);
+
+                if (img_ext->read != NULL) {
+                    size_t read_addr = (size_t)pixmap->bitmap.addr;
+                    img_ext->read(read_addr + offset, pixmap_buf, pix_byte * (clip.x2 - clip.x1 + 1));
+                    offset = 0;
+                }
+
+                for (int x = clip.x1; x <= clip.x2; x++) {
+                    uint8_t pix_opa;
+                    sgl_color_t tmp_color = decode_pixel(pixmap, pixmap_buf, offset, &pix_opa);
+                    blend_pixel(blend, tmp_color, pix_opa, img_ext->alpha);
+                    offset += pix_byte;
+                    blend++;
+                }
+                buf += surf->w;
+            }
+
+            if (img_ext->read != NULL && pixmap_buf != NULL) {
+                sgl_free(pixmap_buf);
+            }
+            return;
+        }
+
+        /* Rotation + scaling mode (centered on widget) */
+        int16_t rotation = sgl_mod360(img_ext->rotation);
+        int32_t sin_val = sgl_sin(rotation);
+        int32_t cos_val = sgl_cos(rotation);
+
+        /* Widget center from coords (already the rotated bbox set by setters) */
+        int32_t center_x = (obj->coords.x1 + obj->coords.x2) / 2;
+        int32_t center_y = (obj->coords.y1 + obj->coords.y2) / 2;
+
+        sgl_area_t clip = SGL_AREA_INVALID;
+
+        if (!sgl_surf_clip(surf, &obj->coords, &clip)) {
+            return;
+        }
+
+        /* Allocate temporary buffer if external read callback is set */
+        if (img_ext->read != NULL && img_ext->flash_buffer != NULL) {
+            img_ext->flash_buffer = (uint8_t*)sgl_malloc(pix_byte * (clip.x2 - clip.x1 + 1));
+            pixmap_buf = img_ext->flash_buffer;
+        }
+
+        sgl_color_t *dst = sgl_surf_get_buf(surf, clip.x1 - surf->x1, clip.y1 - surf->y1);
+
+        /* Compute inverse scale factors for reverse mapping */
+        int32_t inv_scale_x = (SGL_FIXED_ONE << SGL_FIXED_SHIFT) / img_ext->scale_x;
+        int32_t inv_scale_y = (SGL_FIXED_ONE << SGL_FIXED_SHIFT) / img_ext->scale_y;
+
+        /* Image center in fixed-point */
+        int32_t half_w = pixmap->width << (SGL_FIXED_SHIFT - 1);
+        int32_t half_h = pixmap->height << (SGL_FIXED_SHIFT - 1);
+
+        for (int py = clip.y1; py <= clip.y2; py++) {
+            sgl_color_t *blend = dst;
+
+            for (int px = clip.x1; px <= clip.x2; px++, blend++) {
+                /* Target pixel offset relative to widget center (fixed-point) */
+                int32_t rel_x = ((int32_t)px - center_x) << SGL_FIXED_SHIFT;
+                int32_t rel_y = ((int32_t)py - center_y) << SGL_FIXED_SHIFT;
+
+                /* Inverse scale (64-bit multiply to avoid overflow) */
+                int32_t rx = ((int64_t)rel_x * inv_scale_x) >> SGL_FIXED_SHIFT;
+                int32_t ry = ((int64_t)rel_y * inv_scale_y) >> SGL_FIXED_SHIFT;
+
+                /* Inverse rotation transform */
+                // src_x = cos * rx + sin * ry + half_w
+                // src_y = -sin * rx + cos * ry + half_h
+                int32_t src_x_fixed = (((int64_t)cos_val * rx) >> SGL_FIXED_SHIFT) + (((int64_t)sin_val * ry) >> SGL_FIXED_SHIFT) + half_w;
+                int32_t src_y_fixed = (((int64_t)-sin_val * rx) >> SGL_FIXED_SHIFT) + (((int64_t)cos_val * ry) >> SGL_FIXED_SHIFT) + half_h;
+
+                /* Extract integer coordinates (floor) */
+                int32_t src_x = src_x_fixed >> SGL_FIXED_SHIFT;
+                int32_t src_y = src_y_fixed >> SGL_FIXED_SHIFT;
+                // float fx = src_x_f - (float)src_x;
+                // float fy = src_y_f - (float)src_y;
+
+                // Decode and blend pixel
+                if (pixmap->format <= SGL_PIXMAP_FMT_ARGB8888) {
+#if (CONFIG_SGL_IMG_EXT_BILN)
+                    /* Bilinear interpolation: clamp to [0, w-2] x [0, h-2] for 2x2 sampling */
+                    if (src_x < 0 || src_x >= pixmap->width - 1 ||
+                        src_y < 0 || src_y >= pixmap->height - 1) {
+                        continue;
+                    }
+                    /* Read rows for bilinear (current + next row) if using external callback */
+                    if (img_ext->read != NULL) {
+                        size_t row_offset = (size_t)src_y * pixmap->width * pix_byte;
+                        img_ext->read((size_t)(pixmap->bitmap.addr + row_offset),
+                                      pixmap_buf, pix_byte * pixmap->width * 2);
+                    }
+                    uint8_t pix_opa;
+                    sgl_color_t color = pixmap_biln_color(pixmap, pixmap_buf,
+                                                          src_x_fixed, src_y_fixed,
+                                                          &pix_opa);
+                    blend_pixel(blend, color, pix_opa, img_ext->alpha);
+#else
+                    /* Nearest-neighbor: single pixel sample */
+                    if (src_x < 0 || src_x >= pixmap->width ||
+                        src_y < 0 || src_y >= pixmap->height) {
+                        continue;
+                    }
+                    if (img_ext->read != NULL) {
+                        size_t row_offset = (size_t)src_y * pixmap->width * pix_byte;
+                        img_ext->read((size_t)(pixmap->bitmap.addr + row_offset), pixmap_buf, pix_byte * pixmap->width);
+                    }
+                    size_t offset = (size_t)src_y * pixmap->width * pix_byte + (size_t)src_x * pix_byte;
+                    uint8_t pix_opa;
+                    sgl_color_t color = decode_pixel(pixmap, pixmap_buf, offset, &pix_opa);
+                    if (pix_opa != SGL_ALPHA_MAX) {
+                        *blend = sgl_color_mixer(color, *blend, pix_opa);
+                    } else {
+                        *blend = color;
+                    }
+#endif /* CONFIG_SGL_IMG_EXT_BILN */
+                }
+            }
+            dst += surf->w;
+        }
+    }
+    break;
+
+    case SGL_EVENT_DESTROYED:
+        if (img_ext->flash_buffer != NULL) {
+            sgl_free(img_ext->flash_buffer);
+        }
+    break;
+    default: return;
+    }
+}
+
+/**
+ * @brief Create a transformable image widget.
+ * @param parent Parent object
+ * @return New image extension object, or NULL on allocation failure
+ */
+sgl_obj_t* sgl_img_ext_create(sgl_obj_t* parent)
+{
+    sgl_img_ext_t *img_ext = sgl_malloc(sizeof(sgl_img_ext_t));
+    if (img_ext == NULL) {
+        SGL_LOG_ERROR("sgl_img_ext_create: malloc failed");
+        return NULL;
+    }
+
+    memset(img_ext, 0, sizeof(sgl_img_ext_t));
+
+    sgl_obj_t *obj = &img_ext->obj;
+    sgl_obj_init(&img_ext->obj, parent);
+    obj->construct_fn = sgl_img_ext_construct_cb;
+
+    img_ext->alpha = SGL_ALPHA_MAX;
+    img_ext->rotation = 0;
+    img_ext->scale_x = SGL_FIXED_ONE;  // 1.0
+    img_ext->scale_y = SGL_FIXED_ONE;  // 1.0
+    img_ext->scale_uniform = true;
+
+    return obj;
+}
+
+/**
+ * @brief Set the pixmap source for the image widget.
+ * @param obj Image extension object
+ * @param pixmap Pixmap data to render
+ */
+void sgl_img_ext_set_pixmap(sgl_obj_t *obj, const sgl_pixmap_t *pixmap)
+{
+    SGL_ASSERT(obj != NULL);
+    sgl_img_ext_t *img_ext = (sgl_img_ext_t*)obj;
+    img_ext->pixmap = pixmap;
+    img_ext_update_coords(img_ext);
+    sgl_obj_set_dirty(obj);
+}
+
+/**
+ * @brief Set global opacity of the image widget.
+ * @param obj Image extension object
+ * @param alpha Opacity value (0 = transparent, 255 = opaque)
+ */
+void sgl_img_ext_set_alpha(sgl_obj_t *obj, uint8_t alpha)
+{
+    SGL_ASSERT(obj != NULL);
+    ((sgl_img_ext_t*)obj)->alpha = alpha;
+    sgl_obj_set_dirty(obj);
+}
+
+/**
+ * @brief Set rotation angle of the image widget.
+ * @param obj Image extension object
+ * @param rotation Angle in degrees (normalized to 0-360)
+ */
+void sgl_img_ext_set_rotation(sgl_obj_t *obj, int16_t rotation)
+{
+    SGL_ASSERT(obj != NULL);
+    sgl_img_ext_t *img_ext = (sgl_img_ext_t*)obj;
+    img_ext->rotation = sgl_mod360(rotation);
+    img_ext_update_coords(img_ext);
+    sgl_obj_set_dirty(obj);
+}
+
+/**
+ * @brief Set independent X/Y scale factors (fixed-point).
+ * @param obj Image extension object
+ * @param scale_x X-axis scale (SGL_FIXED_ONE = 1.0)
+ * @param scale_y Y-axis scale (SGL_FIXED_ONE = 1.0)
+ */
+void sgl_img_ext_set_scale(sgl_obj_t *obj, int32_t scale_x, int32_t scale_y)
+{
+    SGL_ASSERT(obj != NULL);
+    sgl_img_ext_t *img_ext = (sgl_img_ext_t*)obj;
+    img_ext->scale_x = scale_x;
+    img_ext->scale_y = scale_y;
+    img_ext->scale_uniform = false;
+    img_ext_update_coords(img_ext);
+    sgl_obj_set_dirty(obj);
+}
+
+/**
+ * @brief Set uniform scale from a signed byte.
+ * @param obj Image extension object
+ * @param scale Scale value: 0 = 1x, positive = zoom in, negative = zoom out
+ */
+void sgl_img_ext_set_scale_uniform(sgl_obj_t *obj, int8_t scale)
+{
+    SGL_ASSERT(obj != NULL);
+    sgl_img_ext_t *img_ext = (sgl_img_ext_t*)obj;
+
+    /*
+     * Map -127..128 range to a fixed-point scale factor:
+     *   0   = 1.0x (no scaling)
+     *   >0  = zoom in  (e.g. 64 ~ 1.5x, 128 = 2.0x)
+     *   <0  = zoom out (e.g. -64 ~ 0.5x)
+     */
+    int32_t fixed_scale = SGL_FIXED_ONE + ((int32_t)scale << (SGL_FIXED_SHIFT - 7));
+
+    /* Clamp scale range */
+    if (fixed_scale < 1) fixed_scale = 1;
+    if (fixed_scale > SGL_FIXED_ONE * 4) fixed_scale = SGL_FIXED_ONE * 4;
+
+    img_ext->scale_x = fixed_scale;
+    img_ext->scale_y = fixed_scale;
+
+    img_ext->scale_uniform = true;
+    img_ext_update_coords(img_ext);
+    sgl_obj_set_dirty(obj);
+}
+
+/**
+ * @brief Set external flash read callback for memory-mapped pixmap access.
+ * @param obj Image extension object
+ * @param read Read function: (addr, out_buf, len_bytes)
+ */
+void sgl_img_ext_set_read_ops(sgl_obj_t *obj, void (*read)(const size_t addr, uint8_t *out, uint32_t len_bytes))
+{
+    SGL_ASSERT(obj != NULL);
+    ((sgl_img_ext_t*)obj)->read = read;
+}

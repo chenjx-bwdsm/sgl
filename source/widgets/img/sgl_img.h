@@ -1,4 +1,4 @@
-/* source/widgets/sgl_ext_img.h
+/* source/widgets/sgl_img.h
  *
  * MIT License
  *
@@ -22,8 +22,8 @@
  * SOFTWARE.
  */
 
-#ifndef __SGL_EXT_IMG_H__
-#define __SGL_EXT_IMG_H__
+#ifndef __SGL_IMG_H__
+#define __SGL_IMG_H__
 
 #include <sgl_core.h>
 #include <sgl_draw.h>
@@ -49,11 +49,11 @@
  *              .bitmap = addr_of_extern_flash,
  *              .format = SGL_PIXMAP_FMT_RGB565,
  *          };
- *          sgl_obj_t *ext_img = sgl_ext_img_create(NULL);
- *          sgl_obj_set_pos(ext_img, 10, 10);
- *          sgl_obj_set_size(ext_img, 142, 69);
- *          sgl_ext_img_set_pixmap(ext_img, &test_pixmap);
- *          sgl_ext_img_set_read_ops(ext_img, flash_port_read_data_from_flash);
+ *          sgl_obj_t *img = sgl_img_create(NULL);
+ *          sgl_obj_set_pos(img, 10, 10);
+ *          sgl_obj_set_size(img, 142, 69);
+ *          sgl_img_set_pixmap(img, &test_pixmap);
+ *          sgl_img_set_read_ops(img, flash_port_read_data_from_flash);
  *  
  * 2. RLE compress image object:
  *      you can use this object to draw image from external flash memory
@@ -65,10 +65,10 @@
  *              .bitmap = pixmap_data,
  *              .format = SGL_PIXMAP_FMT_RLE_RGB565,
  *          };
- *          sgl_obj_t *ext_img = sgl_ext_img_create(NULL);
- *          sgl_obj_set_pos(ext_img, 10, 10);
- *          sgl_obj_set_size(ext_img, 142, 69);
- *          sgl_ext_img_set_pixmap(ext_img, &test_pixmap);
+ *          sgl_obj_t *img = sgl_img_create(NULL);
+ *          sgl_obj_set_pos(img, 10, 10);
+ *          sgl_obj_set_size(img, 142, 69);
+ *          sgl_img_set_pixmap(img, &test_pixmap);
  * 
  * 3. Mult pixmap image object:
  *      you can use this object to draw image from external flash memory
@@ -99,95 +99,93 @@
  *              },
  *              ...
  *          };
- *          sgl_obj_t *ext_img = sgl_ext_img_create(NULL);
- *          sgl_obj_set_pos(ext_img, 10, 10);
- *          sgl_obj_set_size(ext_img, 142, 69);
- *          sgl_ext_img_set_pixmap(ext_img, test_pixmap);
- *          sgl_ext_img_set_pixmap_num(ext_img, 128, true);
- *          sgl_ext_img_set_read_ops(ext_img, flash_port_read_data_from_flash);
+ *          sgl_obj_t *img = sgl_img_create(NULL);
+ *          sgl_obj_set_pos(img, 10, 10);
+ *          sgl_obj_set_size(img, 142, 69);
+ *          sgl_img_set_pixmap(img, test_pixmap);
+ *          sgl_img_set_pixmap_num(img, 128, true);
+ *          sgl_img_set_read_ops(img, flash_port_read_data_from_flash);
  */
 
  /* TODO: add ext img buffer size config */
-#define SGL_EXT_IMG_BUFFER_SIZE   (CONFIG_SGL_EXT_IMG_BUFFER)
+#define SGL_IMG_BUFFER_SIZE   (CONFIG_SGL_IMG_BUFFER)
 
 /**
- * @brief sgl ext_img struct
+ * @brief sgl img struct
  * @obj: sgl general object
- * @desc: pointer to ext_img draw descriptor
+ * @desc: pointer to img draw descriptor
  */
-typedef struct sgl_ext_img {
+typedef struct sgl_img {
     sgl_obj_t       obj;
     const sgl_pixmap_t *pixmap;
     void            (*read)(const size_t addr, uint8_t *buf, uint32_t len_bytes);
     /* RLE compress context */
-    sgl_color_t     color;
     uint32_t        index;
+    sgl_color_t     color;
     uint8_t         alpha;
     uint8_t         pixmap_auto;
     uint8_t         pixmap_idx;
     uint8_t         pixmap_num;
     uint8_t         remainder;
     uint8_t         pix_alpha;
-#if CONFIG_SGL_EXT_IMG_BUFFER
-    uint8_t         flash_buffer[SGL_EXT_IMG_BUFFER_SIZE];
-#endif
-} sgl_ext_img_t;
+    uint8_t         *flash_buffer;
+} sgl_img_t;
 
 /**
- * @brief create an ext_img object
- * @param parent parent of the ext_img
- * @return ext_img object
+ * @brief create an img object
+ * @param parent parent of the img
+ * @return img object
  */
-sgl_obj_t* sgl_ext_img_create(sgl_obj_t* parent);
+sgl_obj_t* sgl_img_create(sgl_obj_t* parent);
 
 /**
- * @brief set ext_img pixmap
- * @param obj ext_img object
- * @param pixmap ext_img pixmap
+ * @brief set img pixmap
+ * @param obj img object
+ * @param pixmap img pixmap
  * @return none
  */
-void sgl_ext_img_set_pixmap(sgl_obj_t *obj, const sgl_pixmap_t *pixmap);
+void sgl_img_set_pixmap(sgl_obj_t *obj, const sgl_pixmap_t *pixmap);
 
 /**
- * @brief set ext_img read operation
- * @param obj ext_img object
- * @param read ext_img read operation
+ * @brief set img read operation
+ * @param obj img object
+ * @param read img read operation
  * @return none
  */
-void sgl_ext_img_set_read_ops(sgl_obj_t *obj, void (*read)(const size_t addr, uint8_t *out, uint32_t len_bytes));
+void sgl_img_set_read_ops(sgl_obj_t *obj, void (*read)(const size_t addr, uint8_t *out, uint32_t len_bytes));
 
 /**
- * @brief set ext_img alpha
- * @param obj ext_img object
- * @param alpha ext_img alpha
+ * @brief set img alpha
+ * @param obj img object
+ * @param alpha img alpha
  * @return none
  */
-void sgl_ext_img_set_alpha(sgl_obj_t *obj, uint8_t alpha);
+void sgl_img_set_alpha(sgl_obj_t *obj, uint8_t alpha);
 
 /**
- * @brief set ext_img pixmap number
- * @param obj ext_img object
- * @param num ext_img pixmap number
- * @param auto_refresh ext_img pixmap auto refresh
+ * @brief set img pixmap number
+ * @param obj img object
+ * @param num img pixmap number
+ * @param auto_refresh img pixmap auto refresh
  * @return none
- * @note if auto_refresh is true, the ext_img will refresh automatically after pixmap flush conplete
+ * @note if auto_refresh is true, the img will refresh automatically after pixmap flush conplete
  * @warning the num max is 255
  */
-void sgl_ext_img_set_pixmap_num(sgl_obj_t *obj, uint8_t num, bool auto_refresh);
+void sgl_img_set_pixmap_num(sgl_obj_t *obj, uint8_t num, bool auto_refresh);
 
 /**
- * @brief set ext_img next pixmap
- * @param obj ext_img object
+ * @brief set img next pixmap
+ * @param obj img object
  * @return none
  */
-void sgl_ext_img_set_pixmap_next(sgl_obj_t *obj);
+void sgl_img_set_pixmap_next(sgl_obj_t *obj);
 
 /**
- * @brief set ext_img pixmap current index
- * @param obj ext_img object
- * @param index ext_img pixmap index
+ * @brief set img pixmap current index
+ * @param obj img object
+ * @param index img pixmap index
  * @return none
  */
-void sgl_ext_img_set_pixmap_index(sgl_obj_t *obj, uint8_t index);
+void sgl_img_set_pixmap_index(sgl_obj_t *obj, uint8_t index);
 
-#endif // !__SGL_EXT_IMG_H__
+#endif // !__SGL_IMG_H__

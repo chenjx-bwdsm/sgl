@@ -130,10 +130,6 @@ extern "C" {
 #define CONFIG_SGL_FONT_SMALL_TABLE                                (0)  /* Use small font table */
 #endif
 
-#ifndef CONFIG_SGL_LABEL_ROTATION
-#define CONFIG_SGL_LABEL_ROTATION                                  (0)  /* Label text rotation support */
-#endif
-
 #ifndef CONFIG_SGL_FONT_SONG23
 #define CONFIG_SGL_FONT_SONG23                                     (0)  /* Enable Song23 font */
 #endif

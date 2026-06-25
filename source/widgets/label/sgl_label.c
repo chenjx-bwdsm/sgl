@@ -21,7 +21,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-
 #include <sgl_core.h>
 #include <sgl_draw.h>
 #include <sgl_math.h>
@@ -31,7 +30,6 @@
 #include <sgl_cfgfix.h>
 #include <string.h>
 #include "sgl_label.h"
-
 
 /**
  * @brief to update text of the label
@@ -45,14 +43,13 @@ static void sgl_label_update_area(sgl_label_t *label, const char *text, sgl_area
     if (label->font) {
         if (text) {
             align_pos = sgl_get_text_pos(&label->obj.coords, label->font, text, 0, (sgl_align_type_t)label->align);
-            area->x1 = align_pos.x + label->transform.offset.offset_x - 1;
+            area->x1 = align_pos.x + label->offset_x - 1;
             area->x2 = area->x1 + sgl_font_get_string_width(text, label->font);
-            area->y1 = align_pos.y + label->transform.offset.offset_y - 1;
+            area->y1 = align_pos.y + label->offset_y - 1;
             area->y2 = area->y1 + sgl_font_get_height(label->font);
         }
     }
 }
-
 
 /**
  * @brief construct the label object
@@ -75,47 +72,10 @@ static void sgl_label_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t
 
         align_pos = sgl_get_text_pos(&obj->coords, label->font, label->text, 0, (sgl_align_type_t)label->align);
 
-#if (CONFIG_SGL_LABEL_ROTATION)
-        if (label->rota == 0) {
-#endif 
-            sgl_draw_string(surf, &obj->area, align_pos.x + label->transform.offset.offset_x, 
-                                              align_pos.y + label->transform.offset.offset_y, 
-                                              label->text, label->color, label->alpha, label->font);
-#if (CONFIG_SGL_LABEL_ROTATION)
-        }
-        else {
-            const int16_t width = obj->area.x2 - obj->area.x1 + 1;
-            const int16_t height = obj->area.y2 - obj->area.y1 + 1;
-            const uint32_t buf_size = width * height;
+        sgl_draw_string(surf, &obj->area, align_pos.x + label->offset_x, 
+                                            align_pos.y + label->offset_y, 
+                                            label->text, label->color, label->alpha, label->font);
 
-            sgl_color_t *temp_buf = sgl_malloc(buf_size * sizeof(sgl_color_t));
-            if (temp_buf == NULL) {
-                SGL_LOG_ERROR("sgl_label_construct_cb: malloc rotation temp buffer failed");
-                return;
-            }
-
-            for (uint32_t i = 0; i < buf_size; i++) {
-                temp_buf[i] = label->bg_color;
-            }
-
-            sgl_surf_t temp_surf = {
-                .x1 = align_pos.x,
-                .y1 = align_pos.y,
-                .x2 = 0,
-                .y2 = 0,
-                .buffer = temp_buf,
-                .w = width,
-                .h = height,
-                .dirty = NULL
-            };
-
-            sgl_draw_string(&temp_surf, &obj->area, align_pos.x, align_pos.y,
-                                              label->text, label->color, label->alpha, label->font);
-            sgl_draw_xform_surf(surf, &temp_surf, &obj->parent->area, obj->coords.x1, obj->coords.y1, label->transform.rotation);
-
-            sgl_free(temp_buf);
-        }
-#endif
     } else if (evt->type == SGL_EVENT_DESTROYED) {
         if (label->dynamic) {
             sgl_free((void*)label->text);
@@ -147,8 +107,6 @@ sgl_obj_t* sgl_label_create(sgl_obj_t* parent)
     label->bg_flag = 0;
     label->color = SGL_THEME_TEXT_COLOR;
     label->text = "";
-    label->transform.rotation = 0;
-    label->rota = 0;
     label->font = sgl_get_system_font();
 
     return obj;
@@ -377,22 +335,7 @@ void sgl_label_set_alpha(sgl_obj_t *obj, uint8_t alpha)
 void sgl_label_set_text_offset(sgl_obj_t *obj, int8_t offset_x, int8_t offset_y)
 {
     sgl_label_t *label = sgl_container_of(obj, sgl_label_t, obj);
-    label->transform.offset.offset_x = offset_x;
-    label->transform.offset.offset_y = offset_y;
-    sgl_obj_set_dirty(obj);
-}
-
-/**
- * @brief set label text rotation
- * @param obj pointer to the label object
- * @param text_rotation text rotation angle (0-360 degree)
- * @return none
- */
-void sgl_label_set_text_rotation(sgl_obj_t *obj, int16_t text_rotation)
-{
-    sgl_label_t *label = sgl_container_of(obj, sgl_label_t, obj);
-    label->transform.rotation = text_rotation % 360;
-    if (label->transform.rotation < 0) label->transform.rotation += 360;
-    label->rota = label->transform.rotation ? 1 : 0;
+    label->offset_x = offset_x;
+    label->offset_y = offset_y;
     sgl_obj_set_dirty(obj);
 }
