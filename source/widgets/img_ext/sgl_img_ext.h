@@ -80,10 +80,10 @@ void sgl_img_ext_set_rotation(sgl_obj_t *obj, int16_t rotation);
 /**
  * @brief Set independent X/Y scale factors (fixed-point).
  * @param obj Image extension object
- * @param scale_x X-axis scale (SGL_FIXED_ONE = 1.0)
- * @param scale_y Y-axis scale (SGL_FIXED_ONE = 1.0)
+ * @param scale_x X-axis scale
+ * @param scale_y Y-axis scale
  */
-void sgl_img_ext_set_scale(sgl_obj_t *obj, int32_t scale_x, int32_t scale_y);
+void sgl_img_ext_set_scale(sgl_obj_t *obj, float scale_x, float scale_y);
 
 /**
  * @brief Set uniform scale from a signed byte.
