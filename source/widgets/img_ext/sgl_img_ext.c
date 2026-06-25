@@ -80,7 +80,7 @@ static inline void blend_pixel(sgl_color_t *dst, sgl_color_t src, uint8_t pix_op
     *dst = (global_alpha == SGL_ALPHA_MAX) ? src : sgl_color_mixer(src, *dst, global_alpha);
 }
 
-#if (CONFIG_SGL_IMG_EXT_BILN)
+#if (CONFIG_SGL_PIXMAP_BILINEAR_INTERP)
 /**
  * @brief Bilinear interpolation on raw pixmap data.
  * Decodes a 2x2 pixel neighborhood and interpolates using fixed-point
