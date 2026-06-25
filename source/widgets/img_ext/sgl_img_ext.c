@@ -309,6 +309,12 @@ static void sgl_img_ext_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event
         int32_t half_w = pixmap->width << (SGL_FIXED_SHIFT - 1);
         int32_t half_h = pixmap->height << (SGL_FIXED_SHIFT - 1);
 
+#if (CONFIG_SGL_PIXMAP_BILINEAR_INTERP)
+        /* Image bounds in fixed-point (for edge AA) */
+        int32_t max_x_fp = (int32_t)pixmap->width  << SGL_FIXED_SHIFT;
+        int32_t max_y_fp = (int32_t)pixmap->height << SGL_FIXED_SHIFT;
+#endif
+
         for (int py = clip.y1; py <= clip.y2; py++) {
             sgl_color_t *blend = dst;
 
@@ -327,33 +333,48 @@ static void sgl_img_ext_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event
                 int32_t src_x_fixed = (((int64_t)cos_val * rx) >> SGL_FIXED_SHIFT) + (((int64_t)sin_val * ry) >> SGL_FIXED_SHIFT) + half_w;
                 int32_t src_y_fixed = (((int64_t)-sin_val * rx) >> SGL_FIXED_SHIFT) + (((int64_t)cos_val * ry) >> SGL_FIXED_SHIFT) + half_h;
 
-                /* Extract integer coordinates (floor) */
-                int32_t src_x = src_x_fixed >> SGL_FIXED_SHIFT;
-                int32_t src_y = src_y_fixed >> SGL_FIXED_SHIFT;
-                // float fx = src_x_f - (float)src_x;
-                // float fy = src_y_f - (float)src_y;
-
-                // Decode and blend pixel
+                /* Decode and blend pixel */
                 if (pixmap->format <= SGL_PIXMAP_FMT_ARGB8888) {
-#if (CONFIG_SGL_IMG_EXT_BILN)
-                    /* Bilinear interpolation: clamp to [0, w-2] x [0, h-2] for 2x2 sampling */
-                    if (src_x < 0 || src_x >= pixmap->width - 1 ||
-                        src_y < 0 || src_y >= pixmap->height - 1) {
-                        continue;
+#if (CONFIG_SGL_PIXMAP_BILINEAR_INTERP)
+                    /* --- Edge anti-aliasing: compute sub-pixel coverage ---
+                     * For pixels within 1 source-pixel of any image edge,
+                     * compute a [0..1] coverage factor used to modulate alpha. */
+                    if (src_x_fixed < 0 || src_x_fixed >= max_x_fp || src_y_fixed < 0 || src_y_fixed >= max_y_fp) {
+                        continue;  /* Fully outside the image */
                     }
-                    /* Read rows for bilinear (current + next row) if using external callback */
+
+                    /* Signed distance (fixed-point) to each edge */
+                    int32_t d_left   = src_x_fixed;
+                    int32_t d_right  = max_x_fp - 1 - src_x_fixed;
+                    int32_t d_top    = src_y_fixed;
+                    int32_t d_bottom = max_y_fp - 1 - src_y_fixed;
+
+                    /* Min distance, clamped to [0, FIXED_ONE] = [0, 1.0] */
+                    int32_t edge_dist = sgl_min4(d_left, d_right, d_top, d_bottom);
+                    edge_dist = (edge_dist < 0) ? 0 : (edge_dist > SGL_FIXED_ONE) ? SGL_FIXED_ONE : edge_dist;
+
+                    /* Convert to 8-bit edge coverage [0..SGL_ALPHA_MAX] */
+                    uint8_t edge_cov = (uint8_t)((edge_dist * SGL_ALPHA_MAX) >> SGL_FIXED_SHIFT);
+
+                    /* Bilinear: clamp coords to valid 2x2 range for edge pixels */
+                    int32_t bx = (src_x_fixed < 0) ? 0 : (src_x_fixed > max_x_fp - (1 << SGL_FIXED_SHIFT)) ? max_x_fp - (1 << SGL_FIXED_SHIFT) : src_x_fixed;
+                    int32_t by = (src_y_fixed < 0) ? 0 : (src_y_fixed > max_y_fp - (1 << SGL_FIXED_SHIFT)) ? max_y_fp - (1 << SGL_FIXED_SHIFT) : src_y_fixed;
+
                     if (img_ext->read != NULL) {
-                        size_t row_offset = (size_t)src_y * pixmap->width * pix_byte;
+                        size_t row_offset = (size_t)(by >> SGL_FIXED_SHIFT) * pixmap->width * pix_byte;
                         img_ext->read((size_t)(pixmap->bitmap.addr + row_offset),
                                       pixmap_buf, pix_byte * pixmap->width * 2);
                     }
                     uint8_t pix_opa;
-                    sgl_color_t color = pixmap_biln_color(pixmap, pixmap_buf,
-                                                          src_x_fixed, src_y_fixed,
-                                                          &pix_opa);
+                    sgl_color_t color = pixmap_biln_color(pixmap, pixmap_buf, bx, by, &pix_opa);
+                    /* Apply edge coverage to per-pixel alpha */
+                    pix_opa = (uint8_t)(((uint32_t)pix_opa * edge_cov) >> 8);
                     blend_pixel(blend, color, pix_opa, img_ext->alpha);
 #else
-                    /* Nearest-neighbor: single pixel sample */
+                    /* Nearest-neighbor: single pixel sample, no edge AA */
+                    int32_t src_x = src_x_fixed >> SGL_FIXED_SHIFT;
+                    int32_t src_y = src_y_fixed >> SGL_FIXED_SHIFT;
+
                     if (src_x < 0 || src_x >= pixmap->width ||
                         src_y < 0 || src_y >= pixmap->height) {
                         continue;
