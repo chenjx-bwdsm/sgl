@@ -32,6 +32,11 @@
 #include <string.h>
 #include "sgl_img_ext.h"
 
+/* Scale with correct rounding for negative values */
+#define SGL_IMG_SCALE(val, sc) \
+    ((val) >= 0 ? (((int64_t)(val) * (sc) + SGL_FIXED_ONE - 1) >> SGL_FIXED_SHIFT) \
+                : (((int64_t)(val) * (sc) - SGL_FIXED_ONE + 1) >> SGL_FIXED_SHIFT))
+
 /**
  * Decode a single pixel from the pixmap buffer.
  * Returns the decoded color and writes per-pixel opacity to *out_opa
@@ -156,55 +161,72 @@ static inline sgl_color_t pixmap_biln_color(const sgl_pixmap_t *pixmap,
 
 /**
  * @brief Recompute obj->coords to the axis-aligned bounding box of the
- *        rotated + scaled image, preserving the widget center.
- *        Must be called after any change to rotation, scale, or pixmap.
+ *        rotated + scaled image, using the pivot as rotation center.
  */
 static void img_ext_update_coords(sgl_img_ext_t *img_ext)
 {
     sgl_obj_t *obj = &img_ext->obj;
 
-    if (!img_ext->pixmap) {
-        return;
+    if (!img_ext->pixmap) return;
+
+    /* Resolve effective pivot (INT32_MIN = use image center) */
+    int32_t pv_x = img_ext->pivot_x;
+    int32_t pv_y = img_ext->pivot_y;
+    if (pv_x == INT32_MIN && pv_y == INT32_MIN) {
+        pv_x = img_ext->pixmap->width / 2;
+        pv_y = img_ext->pixmap->height / 2;
     }
 
-    /* No transform: keep coords as-is */
-    if (img_ext->rotation == 0 &&
-        img_ext->scale_x == SGL_FIXED_ONE &&
-        img_ext->scale_y == SGL_FIXED_ONE) {
-        return;
+    /* screen_pivot = original widget position + pivot offset */
+    int32_t sp_x = img_ext->orig_x1 + pv_x;
+    int32_t sp_y = img_ext->orig_y1 + pv_y;
+
+    int32_t scaled_w = SGL_IMG_SCALE(img_ext->pixmap->width, img_ext->scale_x);
+    int32_t scaled_h = SGL_IMG_SCALE(img_ext->pixmap->height, img_ext->scale_y);
+    if (scaled_w <= 0) scaled_w = img_ext->pixmap->width;
+    if (scaled_h <= 0) scaled_h = img_ext->pixmap->height;
+
+    if (img_ext->rotation == 0) {
+        int32_t pv_sx = SGL_IMG_SCALE(pv_x, img_ext->scale_x);
+        int32_t pv_sy = SGL_IMG_SCALE(pv_y, img_ext->scale_y);
+        obj->coords.x1 = sp_x - pv_sx;
+        obj->coords.y1 = sp_y - pv_sy;
+        obj->coords.x2 = obj->coords.x1 + scaled_w + 2;
+        obj->coords.y2 = obj->coords.y1 + scaled_h + 2;
+    } else {
+        int16_t rotation = sgl_mod360(img_ext->rotation);
+        int32_t sin_val = sgl_sin(rotation);
+        int32_t cos_val = sgl_cos(rotation);
+
+        int32_t x0 = -pv_x,              y0 = -pv_y;
+        int32_t x1 = img_ext->pixmap->width-1 - pv_x,  y1 = -pv_y;
+        int32_t x2 = -pv_x,              y2 = img_ext->pixmap->height-1 - pv_y;
+        int32_t x3 = img_ext->pixmap->width-1 - pv_x,  y3 = img_ext->pixmap->height-1 - pv_y;
+
+        int32_t sx0 = SGL_IMG_SCALE(x0, img_ext->scale_x), sy0 = SGL_IMG_SCALE(y0, img_ext->scale_y);
+        int32_t sx1 = SGL_IMG_SCALE(x1, img_ext->scale_x), sy1 = SGL_IMG_SCALE(y1, img_ext->scale_y);
+        int32_t sx2 = SGL_IMG_SCALE(x2, img_ext->scale_x), sy2 = SGL_IMG_SCALE(y2, img_ext->scale_y);
+        int32_t sx3 = SGL_IMG_SCALE(x3, img_ext->scale_x), sy3 = SGL_IMG_SCALE(y3, img_ext->scale_y);
+
+        int32_t rx0 = ((int64_t)cos_val*sx0 - (int64_t)sin_val*sy0) >> SGL_FIXED_SHIFT;
+        int32_t ry0 = ((int64_t)sin_val*sx0 + (int64_t)cos_val*sy0) >> SGL_FIXED_SHIFT;
+        int32_t rx1 = ((int64_t)cos_val*sx1 - (int64_t)sin_val*sy1) >> SGL_FIXED_SHIFT;
+        int32_t ry1 = ((int64_t)sin_val*sx1 + (int64_t)cos_val*sy1) >> SGL_FIXED_SHIFT;
+        int32_t rx2 = ((int64_t)cos_val*sx2 - (int64_t)sin_val*sy2) >> SGL_FIXED_SHIFT;
+        int32_t ry2 = ((int64_t)sin_val*sx2 + (int64_t)cos_val*sy2) >> SGL_FIXED_SHIFT;
+        int32_t rx3 = ((int64_t)cos_val*sx3 - (int64_t)sin_val*sy3) >> SGL_FIXED_SHIFT;
+        int32_t ry3 = ((int64_t)sin_val*sx3 + (int64_t)cos_val*sy3) >> SGL_FIXED_SHIFT;
+
+        int32_t min_x = sgl_min(rx0, sgl_min(rx1, sgl_min(rx2, rx3)));
+        int32_t max_x = sgl_max(rx0, sgl_max(rx1, sgl_max(rx2, rx3)));
+        int32_t min_y = sgl_min(ry0, sgl_min(ry1, sgl_min(ry2, ry3)));
+        int32_t max_y = sgl_max(ry0, sgl_max(ry1, sgl_max(ry2, ry3)));
+
+        obj->coords.x1 = sp_x + min_x;
+        obj->coords.y1 = sp_y + min_y;
+        obj->coords.x2 = sp_x + max_x;
+        obj->coords.y2 = sp_y + max_y;
     }
-
-    const sgl_pixmap_t *pixmap = img_ext->pixmap;
-    int32_t center_x = (obj->coords.x1 + obj->coords.x2) / 2;
-    int32_t center_y = (obj->coords.y1 + obj->coords.y2) / 2;
-
-    /* Scaled dimensions */
-    int32_t scaled_w = ((int32_t)pixmap->width  * img_ext->scale_x + SGL_FIXED_ONE - 1) >> SGL_FIXED_SHIFT;
-    int32_t scaled_h = ((int32_t)pixmap->height * img_ext->scale_y + SGL_FIXED_ONE - 1) >> SGL_FIXED_SHIFT;
-    if (scaled_w <= 0) scaled_w = pixmap->width;
-    if (scaled_h <= 0) scaled_h = pixmap->height;
-
-    int16_t rotation = sgl_mod360(img_ext->rotation);
-    int32_t sin_val = sgl_sin(rotation);
-    int32_t cos_val = sgl_cos(rotation);
-
-    int32_t hw = scaled_w / 2;
-    int32_t hh = scaled_h / 2;
-
-    /* Rotate 4 corners around center */
-    int32_t rx1 = (cos_val * (-hw) - sin_val * (-hh)) / SGL_SIN_FIXED_ONE;
-    int32_t ry1 = (sin_val * (-hw) + cos_val * (-hh)) / SGL_SIN_FIXED_ONE;
-    int32_t rx2 = (cos_val * ( hw) - sin_val * (-hh)) / SGL_SIN_FIXED_ONE;
-    int32_t ry2 = (sin_val * ( hw) + cos_val * (-hh)) / SGL_SIN_FIXED_ONE;
-    int32_t rx3 = (cos_val * ( hw) - sin_val * ( hh)) / SGL_SIN_FIXED_ONE;
-    int32_t ry3 = (sin_val * ( hw) + cos_val * ( hh)) / SGL_SIN_FIXED_ONE;
-    int32_t rx4 = (cos_val * (-hw) - sin_val * ( hh)) / SGL_SIN_FIXED_ONE;
-    int32_t ry4 = (sin_val * (-hw) + cos_val * ( hh)) / SGL_SIN_FIXED_ONE;
-
-    obj->coords.x1 = center_x + sgl_min4(rx1, rx2, rx3, rx4);
-    obj->coords.y1 = center_y + sgl_min4(ry1, ry2, ry3, ry4);
-    obj->coords.x2 = center_x + sgl_max4(rx1, rx2, rx3, rx4);
-    obj->coords.y2 = center_y + sgl_max4(ry1, ry2, ry3, ry4);
 }
 
 /**
@@ -278,14 +300,20 @@ static void sgl_img_ext_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event
             return;
         }
 
-        /* Rotation + scaling mode (centered on widget) */
+        /* Rotation + scaling mode */
         int16_t rotation = sgl_mod360(img_ext->rotation);
         int32_t sin_val = sgl_sin(rotation);
         int32_t cos_val = sgl_cos(rotation);
 
-        /* Widget center from coords (already the rotated bbox set by setters) */
-        int32_t center_x = (obj->coords.x1 + obj->coords.x2) / 2;
-        int32_t center_y = (obj->coords.y1 + obj->coords.y2) / 2;
+        /* Screen pivot = original widget pos + pivot offset */
+        int32_t pv_x = img_ext->pivot_x;
+        int32_t pv_y = img_ext->pivot_y;
+        if (pv_x == INT32_MIN && pv_y == INT32_MIN) {
+            pv_x = pixmap->width / 2;
+            pv_y = pixmap->height / 2;
+        }
+        int32_t sp_x = img_ext->orig_x1 + pv_x;
+        int32_t sp_y = img_ext->orig_y1 + pv_y;
 
         sgl_area_t clip = SGL_AREA_INVALID;
 
@@ -305,9 +333,10 @@ static void sgl_img_ext_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event
         int32_t inv_scale_x = (SGL_FIXED_ONE << SGL_FIXED_SHIFT) / img_ext->scale_x;
         int32_t inv_scale_y = (SGL_FIXED_ONE << SGL_FIXED_SHIFT) / img_ext->scale_y;
 
-        /* Image center in fixed-point */
-        int32_t half_w = pixmap->width << (SGL_FIXED_SHIFT - 1);
-        int32_t half_h = pixmap->height << (SGL_FIXED_SHIFT - 1);
+        int32_t pivot_x_fixed = pv_x << SGL_FIXED_SHIFT;
+        int32_t pivot_y_fixed = pv_y << SGL_FIXED_SHIFT;
+        int32_t sp_x_fixed = sp_x << SGL_FIXED_SHIFT;
+        int32_t sp_y_fixed = sp_y << SGL_FIXED_SHIFT;
 
 #if (CONFIG_SGL_PIXMAP_BILINEAR_INTERP)
         /* Image bounds in fixed-point (for edge AA) */
@@ -319,19 +348,19 @@ static void sgl_img_ext_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event
             sgl_color_t *blend = dst;
 
             for (int px = clip.x1; px <= clip.x2; px++, blend++) {
-                /* Target pixel offset relative to widget center (fixed-point) */
-                int32_t rel_x = ((int32_t)px - center_x) << SGL_FIXED_SHIFT;
-                int32_t rel_y = ((int32_t)py - center_y) << SGL_FIXED_SHIFT;
+                /* Offset from screen pivot (fixed-point) */
+                int32_t rel_x = ((int32_t)px << SGL_FIXED_SHIFT) - sp_x_fixed;
+                int32_t rel_y = ((int32_t)py << SGL_FIXED_SHIFT) - sp_y_fixed;
 
-                /* Inverse scale (64-bit multiply to avoid overflow) */
-                int32_t rx = ((int64_t)rel_x * inv_scale_x) >> SGL_FIXED_SHIFT;
-                int32_t ry = ((int64_t)rel_y * inv_scale_y) >> SGL_FIXED_SHIFT;
+                /* Inverse transform: first inverse-rotate, then inverse-scale */
+                int32_t rx_rot = ((int64_t)cos_val * rel_x + (int64_t)sin_val * rel_y) >> SGL_FIXED_SHIFT;
+                int32_t ry_rot = ((int64_t)-sin_val * rel_x + (int64_t)cos_val * rel_y) >> SGL_FIXED_SHIFT;
 
-                /* Inverse rotation transform */
-                // src_x = cos * rx + sin * ry + half_w
-                // src_y = -sin * rx + cos * ry + half_h
-                int32_t src_x_fixed = (((int64_t)cos_val * rx) >> SGL_FIXED_SHIFT) + (((int64_t)sin_val * ry) >> SGL_FIXED_SHIFT) + half_w;
-                int32_t src_y_fixed = (((int64_t)-sin_val * rx) >> SGL_FIXED_SHIFT) + (((int64_t)cos_val * ry) >> SGL_FIXED_SHIFT) + half_h;
+                int32_t rx = ((int64_t)rx_rot * inv_scale_x) >> SGL_FIXED_SHIFT;
+                int32_t ry = ((int64_t)ry_rot * inv_scale_y) >> SGL_FIXED_SHIFT;
+
+                int32_t src_x_fixed = rx + pivot_x_fixed;
+                int32_t src_y_fixed = ry + pivot_y_fixed;
 
                 /* Decode and blend pixel */
                 if (pixmap->format <= SGL_PIXMAP_FMT_ARGB8888) {
@@ -432,6 +461,8 @@ sgl_obj_t* sgl_img_ext_create(sgl_obj_t* parent)
     img_ext->scale_x = SGL_FIXED_ONE;  // 1.0
     img_ext->scale_y = SGL_FIXED_ONE;  // 1.0
     img_ext->scale_uniform = true;
+    img_ext->pivot_x = INT32_MIN;  /* sentinel: use image center */
+    img_ext->pivot_y = INT32_MIN;
 
     return obj;
 }
@@ -446,7 +477,14 @@ void sgl_img_ext_set_pixmap(sgl_obj_t *obj, const sgl_pixmap_t *pixmap)
     SGL_ASSERT(obj != NULL);
     sgl_img_ext_t *img_ext = (sgl_img_ext_t*)obj;
     img_ext->pixmap = pixmap;
-    img_ext_update_coords(img_ext);
+
+    /* Capture original widget position for pivot calculation */
+    img_ext->orig_x1 = obj->coords.x1;
+    img_ext->orig_y1 = obj->coords.y1;
+
+    obj->coords.x2 = obj->coords.x1 + pixmap->width - 1;
+    obj->coords.y2 = obj->coords.y1 + pixmap->height - 1;
+
     sgl_obj_set_dirty(obj);
 }
 
@@ -520,6 +558,24 @@ void sgl_img_ext_set_scale_uniform(sgl_obj_t *obj, int8_t scale)
 
     img_ext->scale_uniform = true;
     img_ext_update_coords(img_ext);
+    sgl_obj_set_dirty(obj);
+}
+
+/**
+ * @brief Set pivot point for rotation and scaling.
+ * @param obj Image extension object
+ * @param pivot_x Pivot X coordinate (image coords, 0,0 = top-left)
+ * @param pivot_y Pivot Y coordinate (image coords, 0,0 = top-left)
+ */
+void sgl_img_ext_set_pivot(sgl_obj_t *obj, int32_t pivot_x, int32_t pivot_y)
+{
+    SGL_ASSERT(obj != NULL);
+    sgl_img_ext_t *img_ext = (sgl_img_ext_t*)obj;
+    img_ext->pivot_x = pivot_x;
+    img_ext->pivot_y = pivot_y;
+    if (img_ext->pixmap != NULL) {
+        img_ext_update_coords(img_ext);
+    }
     sgl_obj_set_dirty(obj);
 }
 

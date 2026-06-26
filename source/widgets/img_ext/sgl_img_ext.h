@@ -45,6 +45,10 @@ typedef struct sgl_img_ext {
     int16_t rotation;               /**< Rotation angle in degrees (0-360) */
     int32_t scale_x;                /**< X-axis scale factor (fixed-point) */
     int32_t scale_y;                /**< Y-axis scale factor (fixed-point) */
+    int32_t pivot_x;                /**< Rotation center X (image coords, 0,0 = top-left) */
+    int32_t pivot_y;                /**< Rotation center Y (image coords, 0,0 = top-left) */
+    int32_t orig_x1;                /**< Widget original top-left X (for pivot) */
+    int32_t orig_y1;                /**< Widget original top-left Y (for pivot) */
     void (*read)(const size_t addr, uint8_t *out, uint32_t len_bytes); /**< Flash read callback */
     uint8_t *flash_buffer;          /**< Temporary row buffer for flash reads */
 } sgl_img_ext_t;
@@ -93,6 +97,13 @@ void sgl_img_ext_set_scale(sgl_obj_t *obj, float scale_x, float scale_y);
  *              negative = zoom out (e.g. -64 ~ 0.5x)
  */
 void sgl_img_ext_set_scale_uniform(sgl_obj_t *obj, int8_t scale);
+
+/**
+ * @brief Set external flash read callback for memory-mapped pixmap access.
+ * @param obj Image extension object
+ * @param read Read function: (flash_addr, out_buffer, length_bytes)
+ */
+void sgl_img_ext_set_pivot(sgl_obj_t *obj, int32_t pivot_x, int32_t pivot_y);
 
 /**
  * @brief Set external flash read callback for memory-mapped pixmap access.
