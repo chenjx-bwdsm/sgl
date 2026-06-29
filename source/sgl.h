@@ -36,6 +36,7 @@
 #include "widgets/circle/sgl_circle.h"
 #include "widgets/ring/sgl_ring.h"
 #include "widgets/arc/sgl_arc.h"
+#include "widgets/arc_label/sgl_arc_label.h"
 #include "widgets/button/sgl_button.h"
 #include "widgets/slider/sgl_slider.h"
 #include "widgets/progress/sgl_progress.h"
