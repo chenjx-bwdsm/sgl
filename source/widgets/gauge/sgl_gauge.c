@@ -135,12 +135,12 @@ static void sgl_gauge_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t
                 txt_y = ty - (sgl_font_get_height(gauge->font) / 2);
 
                 if ((angle - gauge->angle_start) < 360) {
-                    draw_line_fill_slanted(surf, &obj->area, x_out, y_out, x_in, y_in, gauge->scale_width * 2, scale_color, gauge->alpha);
+                    sgl_draw_line_fill_slanted(surf, &obj->area, x_out, y_out, x_in, y_in, gauge->scale_width * 2, scale_color, gauge->alpha);
                     sgl_draw_string(surf, &obj->area, txt_x, txt_y, text, gauge->text_color, gauge->alpha, gauge->font);
                 }
             }
             else {
-                draw_line_fill_slanted(surf, &obj->area, x_out, y_out, x_in, y_in, gauge->scale_width, scale_color, gauge->alpha);
+                sgl_draw_line_fill_slanted(surf, &obj->area, x_out, y_out, x_in, y_in, gauge->scale_width, scale_color, gauge->alpha);
             }
             count ++;
             scale_mask += gauge->scale_step;
@@ -155,7 +155,7 @@ static void sgl_gauge_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t
         int32_t nx_needle = ((r - pointer_e) * n_cos) / SGL_SIN_FIXED_ONE + cx + 1;
         int32_t ny_needle = ((r - pointer_e) * n_sin) / SGL_SIN_FIXED_ONE + cy + 1;
 
-        draw_line_fill_slanted(surf, &obj->area, px_needle, py_needle, nx_needle, ny_needle, gauge->pointer_width, gauge->pointer_color, gauge->alpha);
+        sgl_draw_line_fill_slanted(surf, &obj->area, px_needle, py_needle, nx_needle, ny_needle, gauge->pointer_width, gauge->pointer_color, gauge->alpha);
     }
 }
 

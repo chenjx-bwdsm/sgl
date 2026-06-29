@@ -33,17 +33,16 @@
 #include <sgl_cfgfix.h>
 #include <string.h>
 
-
 typedef struct sgl_checkbox {
     sgl_obj_t          obj;
     const char         *text;
     const sgl_font_t   *font;
-    const sgl_icon_pixmap_t *icon;
-    sgl_color_t        color;
+    sgl_color_t        text_color;
     uint8_t            alpha;
     bool               status;
+    sgl_color_t        check_color;
+    sgl_color_t        box_color;
 } sgl_checkbox_t;
-
 
 /**
  * @brief create a checkbox object
@@ -53,12 +52,28 @@ typedef struct sgl_checkbox {
 sgl_obj_t* sgl_checkbox_create(sgl_obj_t* parent);
 
 /**
- * @brief set checkbox text and icon color
+ * @brief set checkbox text color
  * @param obj checkbox object
  * @param color color of text
  * @return none
  */
-void sgl_checkbox_set_color(sgl_obj_t *obj, sgl_color_t color);
+void sgl_checkbox_set_text_color(sgl_obj_t *obj, sgl_color_t color);
+
+/**
+ * @brief set checkbox box color
+ * @param obj checkbox object
+ * @param color color of box
+ * @return none
+ */
+void sgl_checkbox_set_box_color(sgl_obj_t *obj, sgl_color_t color);
+
+/**
+ * @brief set checkbox check color
+ * @param obj checkbox object
+ * @param color color of check
+ * @return none
+ */
+void sgl_checkbox_set_check_color(sgl_obj_t *obj, sgl_color_t color);
 
 /**
  * @brief set checkbox text and icon alpha

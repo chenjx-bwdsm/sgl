@@ -112,7 +112,7 @@ void sgl_draw_fill_vline(sgl_surf_t *surf, sgl_area_t *area, int16_t x, int16_t 
  * @return none
  * @note This algorithm is SDF algorithm
  */
-void draw_line_fill_slanted(sgl_surf_t *surf, sgl_area_t *area, int16_t x1, int16_t y1, int16_t x2, int16_t y2, int16_t thickness, sgl_color_t color, uint8_t alpha)
+void sgl_draw_line_fill_slanted(sgl_surf_t *surf, sgl_area_t *area, int16_t x1, int16_t y1, int16_t x2, int16_t y2, int16_t thickness, sgl_color_t color, uint8_t alpha)
 {
     const int32_t bax = (int32_t)x2 - x1;
     const int32_t bay = (int32_t)y2 - y1;
@@ -360,6 +360,6 @@ void sgl_draw_line(sgl_surf_t *surf, sgl_area_t *area, sgl_draw_line_t *desc)
         sgl_draw_fill_hline(surf, area, desc->y1, desc->x1, desc->x2, desc->width, desc->color, desc->alpha);
     }
     else {
-        draw_line_fill_slanted(surf, area, desc->x1, desc->y1, desc->x2, desc->y2, desc->width, desc->color, desc->alpha);
+        sgl_draw_line_fill_slanted(surf, area, desc->x1, desc->y1, desc->x2, desc->y2, desc->width, desc->color, desc->alpha);
     }
 }
