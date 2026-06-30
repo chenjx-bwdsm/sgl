@@ -54,9 +54,8 @@ static void sgl_checkbox_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
 
     SGL_ASSERT(checkbox->font != NULL);
     if(evt->type == SGL_EVENT_DRAW_MAIN) {
-
         if(checkbox->status) {
-            sgl_draw_fill_rect(surf, &obj->area, &icon, 4, checkbox->box_color, checkbox->alpha);
+            sgl_draw_fill_rect(surf, &obj->area, &icon, box_w / 4, checkbox->box_color, checkbox->alpha);
             const int16_t base_x = icon.x1;
             const int16_t base_y = icon.y1;
 
@@ -75,13 +74,13 @@ static void sgl_checkbox_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
             int16_t ay3 = base_y + off_26;
 
             uint8_t lw = (uint8_t)(box_w >> 3);
-            if (lw < 2) lw = 2;
+            if (lw < 1) lw = 1;
 
             sgl_draw_line_fill_slanted(surf, &obj->area, ax1, ay1, ax2, ay2, lw, checkbox->check_color, checkbox->alpha);
             sgl_draw_line_fill_slanted(surf, &obj->area, ax2, ay2, ax3, ay3, lw, checkbox->check_color, checkbox->alpha);
         }
         else {
-            sgl_draw_fill_rect_border(surf, &obj->area, &icon, 4, checkbox->box_color, 2, checkbox->alpha);
+            sgl_draw_fill_rect_border(surf, &obj->area, &icon, box_w / 4, checkbox->box_color, 2, checkbox->alpha);
         }
 
         sgl_draw_string(surf, &obj->area, align_pos.x + box_w + 2, align_pos.y, checkbox->text, checkbox->text_color, checkbox->alpha, checkbox->font);
