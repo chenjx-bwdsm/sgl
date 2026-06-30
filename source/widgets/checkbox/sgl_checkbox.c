@@ -86,8 +86,10 @@ static void sgl_checkbox_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
         sgl_draw_string(surf, &obj->area, align_pos.x + box_w + 2, align_pos.y, checkbox->text, checkbox->text_color, checkbox->alpha, checkbox->font);
     }
     else if(evt->type == SGL_EVENT_PRESSED) {
-        checkbox->status = !checkbox->status;
-        sgl_obj_update_area(&icon);
+        if (evt->pos.x >= icon.x1 && evt->pos.x <= icon.x2 && evt->pos.y >= icon.y1 && evt->pos.y <= icon.y2) {
+            checkbox->status = !checkbox->status;
+            sgl_obj_update_area(&icon);
+        }
     }
 }
 
