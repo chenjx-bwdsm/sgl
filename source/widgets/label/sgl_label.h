@@ -43,17 +43,16 @@ typedef struct sgl_label {
     sgl_obj_t        obj;
     const sgl_font_t *font;
     char             *text;
-    uint16_t         text_capacity;
     sgl_color_t      color;
     sgl_color_t      bg_color;
-    int8_t           offset_x;
-    int8_t           offset_y;
+    int16_t          offset_x;
+    int16_t          offset_y;
+    uint16_t         text_capacity;
     uint8_t          alpha;
     uint8_t          dynamic : 1;
     uint8_t          align: 6;
     uint8_t          bg_flag : 1;
 } sgl_label_t;
-
 
 /**
  * @brief create a label object
