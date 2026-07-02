@@ -32,51 +32,80 @@
 #include <string.h>
 #include "sgl_switch.h"
 
-
-static void sgl_switch_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t *evt)
+static void sgl_switch_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_event_t *evt)
 {
     sgl_switch_t *p_switch = sgl_container_of(obj, sgl_switch_t, obj);
-    int16_t margin = p_switch->knob_margin + obj->border;
-    int16_t radius = sgl_min(obj->radius - margin, p_switch->knob_radius);
-    int16_t width = obj->coords.y2 - obj->coords.y1 - 2 * margin;
+    int16_t margin = p_switch->knob_margin;
+    int16_t border = obj->border;
+    int16_t obj_h = obj->coords.y2 - obj->coords.y1;
+    int16_t knob_size, bg_inset, knob_offset;
 
-    sgl_rect_t knob_rect = { 
-        .y1 = obj->coords.y1 + margin,
-        .y2 = obj->coords.y2 - margin,
-    };
+    if (margin >= 0) {
+        knob_offset = margin + border;
+        knob_size   = obj_h - 2 * knob_offset;
+        bg_inset    = 0;
+    } else {
+        knob_offset = border;
+        knob_size   = obj_h - 2 * knob_offset;
+        bg_inset    = -margin;
+    }
+
+    if (knob_size < 0) knob_size = 0;
+
+    sgl_rect_t bg_rect = obj->coords;
+    if (bg_inset > 0) {
+        bg_rect.x1 += bg_inset;
+        bg_rect.x2 -= bg_inset;
+        bg_rect.y1 += bg_inset;
+        bg_rect.y2 -= bg_inset;
+    }
+
+    int16_t bg_draw_h = bg_rect.y2 - bg_rect.y1;
+    int16_t bg_r = sgl_min(obj->radius, bg_draw_h / 2);
+    int16_t knob_r;
+
+    if (margin >= 0) {
+        knob_r = bg_r - knob_offset / 2;
+    } else {
+        knob_r = sgl_min(obj->radius - border + 1, knob_size / 2);
+    }
+
+    if (knob_r < 0) knob_r = 0;
+
+    sgl_rect_t knob_rect = {0};
+    knob_rect.y1 = obj->coords.y1 + knob_offset;
+    knob_rect.y2 = knob_rect.y1 + knob_size;
 
     sgl_draw_rect_t bg_desc = {
-        .alpha = p_switch->alpha,
+        .alpha        = p_switch->alpha,
         .border_alpha = p_switch->alpha,
-        .border = obj->border,
-        .color = p_switch->color,
+        .border       = border,
+        .color        = p_switch->bg_color,
         .border_color = p_switch->border_color,
-        .border_mask = obj->focus,
-        .pixmap = p_switch->pixmap,
-        .radius = obj->radius,
+        .border_mask  = obj->focus,
+        .pixmap       = p_switch->pixmap,
+        .radius       = bg_r,
     };
 
-    if(evt->type == SGL_EVENT_DRAW_MAIN) {
-        if(p_switch->status) {
+    if (evt->type == SGL_EVENT_DRAW_MAIN) {
+        if (p_switch->status) {
             bg_desc.color = p_switch->color;
-            knob_rect.x2 = obj->coords.x2 - margin;
-            knob_rect.x1 = knob_rect.x2 - width;
-        }
-        else {
+            knob_rect.x2 = obj->coords.x2 - knob_offset;
+            knob_rect.x1 = knob_rect.x2 - knob_size;
+        } else {
             bg_desc.color = p_switch->bg_color;
-            knob_rect.x1 = obj->coords.x1 + margin;
-            knob_rect.x2 = knob_rect.x1 + width;
+            knob_rect.x1 = obj->coords.x1 + knob_offset;
+            knob_rect.x2 = knob_rect.x1 + knob_size;
         }
 
-        sgl_draw_rect(surf, &obj->area, &obj->coords, &bg_desc);
-        sgl_draw_fill_rect(surf, &obj->area, &knob_rect, radius, p_switch->knob_color, p_switch->alpha);
+        sgl_draw_rect(surf, &obj->area, &bg_rect, &bg_desc);
+        sgl_draw_fill_rect(surf, &obj->area, &knob_rect, knob_r, p_switch->knob_color, p_switch->alpha);
     }
-    else if(evt->type == SGL_EVENT_PRESSED) {
+    else if (evt->type == SGL_EVENT_PRESSED) {
         p_switch->status = !p_switch->status;
         sgl_obj_set_dirty(obj);
     }
 }
-
 
 /**
  * @brief create a switch object
@@ -107,10 +136,9 @@ sgl_obj_t* sgl_switch_create(sgl_obj_t* parent)
     p_switch->status = false;
     p_switch->bg_color = SGL_THEME_BG_COLOR;
     p_switch->knob_color = sgl_color_mixer(SGL_THEME_COLOR, SGL_THEME_BG_COLOR, 128);
-    p_switch->knob_radius = 255;
+    p_switch->knob_margin = 1;
 
     sgl_obj_set_clickable(obj);
-
     return obj;
 }
 
@@ -241,25 +269,12 @@ bool sgl_switch_get_status(sgl_obj_t *obj)
 }
 
 /**
- * @brief set knob radius of switch
- * @param obj switch object
- * @param radius knob radius
- * @return none
- */
-void sgl_switch_set_knob_radius(sgl_obj_t *obj, uint8_t radius)
-{
-    sgl_switch_t *switch_obj = sgl_container_of(obj, sgl_switch_t, obj);
-    switch_obj->knob_radius = radius;
-    sgl_obj_set_dirty(obj);
-}
-
-/**
  * @brief set knob margin of switch
  * @param obj switch object
  * @param margin knob margin
  * @return none
  */
-void sgl_switch_set_knob_margin(sgl_obj_t *obj, uint8_t margin)
+void sgl_switch_set_knob_margin(sgl_obj_t *obj, int8_t margin)
 {
     sgl_switch_t *switch_obj = sgl_container_of(obj, sgl_switch_t, obj);
     switch_obj->knob_margin = margin;

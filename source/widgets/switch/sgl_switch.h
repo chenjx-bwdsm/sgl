@@ -50,8 +50,7 @@ typedef struct sgl_switch {
     sgl_color_t       knob_color;
     uint8_t           alpha;
     bool              status;
-    uint8_t           knob_radius;
-    uint8_t           knob_margin;
+    int16_t           knob_margin;
 } sgl_switch_t;
 
 
@@ -142,19 +141,11 @@ void sgl_switch_set_status(sgl_obj_t *obj, bool status);
 bool sgl_switch_get_status(sgl_obj_t *obj);
 
 /**
- * @brief set knob radius of switch
- * @param obj switch object
- * @param radius knob radius
- * @return none
- */
-void sgl_switch_set_knob_radius(sgl_obj_t *obj, uint8_t radius);
-
-/**
  * @brief set knob margin of switch
  * @param obj switch object
  * @param margin knob margin
  * @return none
  */
-void sgl_switch_set_knob_margin(sgl_obj_t *obj, uint8_t margin);
+void sgl_switch_set_knob_margin(sgl_obj_t *obj, int8_t margin);
 
 #endif // !__SGL_SWITCH_H__
