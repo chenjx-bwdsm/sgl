@@ -146,6 +146,6 @@ bool sgl_switch_get_status(sgl_obj_t *obj);
  * @param margin knob margin
  * @return none
  */
-void sgl_switch_set_knob_margin(sgl_obj_t *obj, int8_t margin);
+void sgl_switch_set_knob_margin(sgl_obj_t *obj, int16_t margin);
 
 #endif // !__SGL_SWITCH_H__

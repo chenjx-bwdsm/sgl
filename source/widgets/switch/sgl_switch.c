@@ -274,7 +274,7 @@ bool sgl_switch_get_status(sgl_obj_t *obj)
  * @param margin knob margin
  * @return none
  */
-void sgl_switch_set_knob_margin(sgl_obj_t *obj, int8_t margin)
+void sgl_switch_set_knob_margin(sgl_obj_t *obj, int16_t margin)
 {
     sgl_switch_t *switch_obj = sgl_container_of(obj, sgl_switch_t, obj);
     switch_obj->knob_margin = margin;
