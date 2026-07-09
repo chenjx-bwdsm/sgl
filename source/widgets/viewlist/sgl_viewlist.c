@@ -55,18 +55,12 @@ static void sgl_viewlist_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
         break;
 
     case SGL_EVENT_MOVE_UP:
-        if((viewlist->pos_y + viewlist->item_num * (viewlist->item_height + viewlist->margin_y)) 
-                                    >= (list_h - viewlist->item_height / 2)) {
-            viewlist->pos_y -= evt->distance;
-            sgl_obj_for_each_child(child, obj) {
-                sgl_obj_set_pos_y(child, sgl_obj_get_pos_y(child) - evt->distance);
-            }
-        }
-        sgl_obj_set_dirty(obj);
-        break;
-
-    case SGL_EVENT_MOVE_DOWN:
-        if(viewlist->pos_y < viewlist->item_height / 2) {
+    case SGL_EVENT_MOVE_DOWN: {
+        bool can_move = (evt->type == SGL_EVENT_MOVE_UP)
+            ? ((viewlist->pos_y + viewlist->item_num * (viewlist->item_height + viewlist->margin_y))
+                                    >= (list_h - viewlist->item_height / 2))
+            : (viewlist->pos_y < viewlist->item_height / 2);
+        if (can_move) {
             viewlist->pos_y += evt->distance;
             sgl_obj_for_each_child(child, obj) {
                 sgl_obj_set_pos_y(child, sgl_obj_get_pos_y(child) + evt->distance);
@@ -74,6 +68,7 @@ static void sgl_viewlist_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
         }
         sgl_obj_set_dirty(obj);
         break;
+    }
 
     case SGL_EVENT_RELEASED:
         diff = viewlist->item_num * (viewlist->item_height + viewlist->margin_y);

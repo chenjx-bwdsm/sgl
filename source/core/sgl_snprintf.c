@@ -100,48 +100,34 @@ static inline size_t int_str_len(int val)
  * @param left_align whether to use left alignment (true: left, false: right)
  * @param zero_pad if pad zeroes, pad zeroes instead of spaces
  */
-static inline void append_int(char *buf, size_t size, size_t *pos, int val, int width, bool left_align, bool zero_pad)
+static void append_int(char *buf, size_t size, size_t *pos, int val, int width, bool left_align, bool zero_pad)
 {
-    char tmp[64];
+    char tmp[12];
     int i = 0;
-    bool neg = val < 0;
-    size_t num_len = int_str_len(val);
-    size_t pad_len = 0;
-
-    if (width > 0 && (size_t)width > num_len) {
-        pad_len = (size_t)width - num_len;
-    }
-
-    char pad_char = ' ';
-    if (zero_pad && !left_align) {
-        pad_char = '0';
-    }
-
-    if (neg && zero_pad) {
-        append_char(buf, size, pos, '-');
-        val = -val;
-        neg = false;
-    }
-
-    if (!left_align && pad_len > 0) {
-        pad_align(buf, size, pos, pad_len, pad_char);
-    }
-
-    if (neg) {
-        val = -val;
-    }
+    bool neg = (val < 0);
+    unsigned int uval = neg ? -(unsigned int)val : (unsigned int)val;
 
     do {
-        tmp[i++] = '0' + (val % 10);
-        val /= 10;
-    } while (val);
+        tmp[i++] = '0' + (uval % 10);
+        uval /= 10;
+    } while (uval);
 
     if (neg) tmp[i++] = '-';
+    int pad = (width > i) ? (width - i) : 0;
 
-    while (i--) append_char(buf, size, pos, tmp[i]);
+    if (!left_align && pad > 0) {
+        char pc = (zero_pad && !neg) ? '0' : ' ';
+        if (zero_pad && neg) {
+            append_char(buf, size, pos, '-');
+            i--;
+        }
+        while (pad-- > 0) append_char(buf, size, pos, pc);
+    }
 
-    if (left_align && pad_len > 0) {
-        pad_align(buf, size, pos, pad_len, ' ');
+    while (i-- > 0) append_char(buf, size, pos, tmp[i]);
+
+    if (left_align && pad > 0) {
+        while (pad-- > 0) append_char(buf, size, pos, ' ');
     }
 }
 
@@ -263,15 +249,10 @@ int sgl_vsnprintf(char *buf, size_t size, const char *fmt, va_list ap)
             break;
         }
 
+        case 'X':
         case 'x': {
             unsigned int x = va_arg(ap, unsigned int);
-            append_hex(buf, size, &pos, x, false);
-            break;
-        }
-
-        case 'X': {
-            unsigned int x = va_arg(ap, unsigned int);
-            append_hex(buf, size, &pos, x, true);
+            append_hex(buf, size, &pos, x, spec == 'X');
             break;
         }
 

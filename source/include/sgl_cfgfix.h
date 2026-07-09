@@ -48,6 +48,10 @@ extern "C" {
 #define CONFIG_SGL_FBDEV_RUNTIME_ROTATION                          (0)  /* Runtime display rotation enable */
 #endif
 
+#ifndef CONFIG_SGL_FBDEV_EVEN_COORDS
+#define CONFIG_SGL_FBDEV_EVEN_COORDS                               (0)  /* FBDEV even coordinates */
+#endif
+
 #ifndef CONFIG_SGL_USE_FBDEV_VRAM
 #define CONFIG_SGL_USE_FBDEV_VRAM                                  (0)  /* Use FBDEV VRAM directly */
 #endif
@@ -127,7 +131,7 @@ extern "C" {
 #endif
 
 #ifndef CONFIG_SGL_FONT_SMALL_TABLE
-#define CONFIG_SGL_FONT_SMALL_TABLE                                (0)  /* Use small font table */
+#define CONFIG_SGL_FONT_SMALL_TABLE                                (1)  /* Use small font table */
 #endif
 
 #ifndef CONFIG_SGL_FONT_SONG23

@@ -1,6 +1,10 @@
 #include "sgl_launcher.h"
 #include <sgl.h>
 
+#define CHANGE_PAGE_THRESHOLD  (5)
+
+static uint8_t current_page = 0;
+
 static int16_t launcher_item_pos(int16_t offset, int16_t total_len,
                                   int count, int16_t item_size, int i)
 {
@@ -31,7 +35,7 @@ static void sgl_launcher_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
             int16_t n       = launcher->page_count;
             int16_t cy      = SGL_SCREEN_HEIGHT - 20;
             int16_t cx0     = (SGL_SCREEN_WIDTH - (n - 1) * spacing) / 2;
-            int16_t cur_page = launcher->current_page;
+            int16_t cur_page = current_page;
 
             for (int16_t i = 0; i < n; i++) {
                 int16_t cx = cx0 + i * spacing;
@@ -47,19 +51,15 @@ static void sgl_launcher_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
     break;
 
     case SGL_EVENT_MOVE_LEFT:
-        sgl_obj_set_pos_x(obj, obj->coords.x1 - evt->distance);
-    break;
-
     case SGL_EVENT_MOVE_RIGHT:
         sgl_obj_set_pos_x(obj, obj->coords.x1 + evt->distance);
     break;
 
     case SGL_EVENT_RELEASED: {
-        int16_t threshold = SGL_SCREEN_WIDTH / 16;
         int16_t delta     = evt->pos.x - launcher->drag_start_x;
-        int16_t target_page = launcher->current_page;
+        int16_t target_page = current_page;
 
-        if (sgl_abs(delta) > threshold) {
+        if (sgl_abs(delta) > CHANGE_PAGE_THRESHOLD) {
             if (delta < 0)
                 target_page++;
             else
@@ -67,7 +67,7 @@ static void sgl_launcher_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
         }
 
         target_page = sgl_clamp(target_page, 0, launcher->page_count - 1);
-        launcher->current_page = target_page;
+        current_page = target_page;
         int16_t target = -(target_page * launcher->page_width) - obj->coords.x1;
         sgl_anim_apply_obj_hori(obj, target, 200, SGL_ANIM_PATH_EASE_OUT);
     } break;
@@ -99,12 +99,12 @@ sgl_obj_t *sgl_launcher_create(sgl_obj_t *parent)
     obj->construct_fn = sgl_launcher_construct_cb;
     sgl_obj_set_movable(obj);
 
-    launcher->margin_left = 20;
+    launcher->margin_left = 30;
     launcher->margin_top = 40;
-    launcher->margin_right = 20;
+    launcher->margin_right = 30;
     launcher->margin_bottom = 60;
-    launcher->grid_col = 4;
-    launcher->grid_row = 5;
+    launcher->grid_col = 3;
+    launcher->grid_row = 4;
     launcher->icon_size = 48;
     launcher->page_count = 1;
     launcher->page_width = SGL_SCREEN_WIDTH;
@@ -247,6 +247,7 @@ void sgl_launcher_add_app(sgl_obj_t *launcher, sgl_launcher_app_t *app)
     }
 
     launcher_obj->count++;
+    sgl_obj_set_pos_x(launcher, - (current_page * launcher_obj->page_width));
 }
 
 /**
@@ -280,8 +281,8 @@ void sgl_launcher_set_navigbar_color(sgl_obj_t *launcher, sgl_color_t color)
  */
 int16_t sgl_launcher_get_current_page(sgl_obj_t *launcher)
 {
-    sgl_launcher_t *launcher_obj = (sgl_launcher_t *)launcher;   
-    return launcher_obj->current_page;
+    SGL_UNUSED(launcher);
+    return current_page;
 }
 
 /**
@@ -294,7 +295,6 @@ void sgl_launcher_set_current_page(sgl_obj_t *launcher, int16_t page)
 {
     sgl_launcher_t *launcher_obj = (sgl_launcher_t *)launcher;
     if (page < 0 || page >= launcher_obj->page_count) return;
-    launcher_obj->current_page = page;
+    current_page = page;
     sgl_obj_set_pos_x(launcher, - (page * launcher_obj->page_width));
-    sgl_obj_set_dirty(launcher);
 }

@@ -77,18 +77,14 @@ static void sgl_textbox_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event
             sgl_draw_fill_rect(surf, &obj->area, &area, SGL_TEXTBOX_SCROLL_WIDTH / 2, textbox->text_color, 128);
         }
     }
-    else if(evt->type == SGL_EVENT_MOVE_UP) {
+    else if(evt->type == SGL_EVENT_MOVE_UP || evt->type == SGL_EVENT_MOVE_DOWN) {
         textbox->text_height = sgl_font_get_string_height(width, textbox->text, textbox->font, textbox->line_margin);
         textbox->scroll_enable = 1;
-        if((textbox->text_height + textbox->y_offset) > height ) {
-           textbox->y_offset -= evt->distance;
-        }
-        sgl_obj_set_dirty(obj);
-    }
-    else if(evt->type == SGL_EVENT_MOVE_DOWN) {
-        textbox->text_height = sgl_font_get_string_height(width, textbox->text, textbox->font, textbox->line_margin);
-        textbox->scroll_enable = 1;
-        if(textbox->y_offset < 0) {
+        bool can_move = (evt->type == SGL_EVENT_MOVE_UP)
+            ? ((textbox->text_height + textbox->y_offset) > height)
+            : (textbox->y_offset < 0);
+
+        if (can_move) {
             textbox->y_offset += evt->distance;
         }
         sgl_obj_set_dirty(obj);

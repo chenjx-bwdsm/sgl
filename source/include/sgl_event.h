@@ -101,7 +101,7 @@ typedef struct sgl_event {
     void             *event_data;
     sgl_event_pos_t  pos;
     uint16_t         type;
-    uint16_t         distance;
+    int16_t          distance;
 } sgl_event_t;
 
 /**

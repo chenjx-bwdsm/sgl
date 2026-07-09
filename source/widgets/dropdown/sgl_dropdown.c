@@ -244,17 +244,12 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_even
     } break;
 
     case SGL_EVENT_MOVE_UP:
-        if (dropdown->is_open) {
-            if ((dropdown->pos_y + dropdown->item_num * item_height) >= (list_h - item_height / 2)) {
-                dropdown->pos_y -= evt->distance;
-            }
-            sgl_obj_set_dirty(obj);
-        }
-        break;
-
     case SGL_EVENT_MOVE_DOWN:
         if (dropdown->is_open) {
-            if (dropdown->pos_y < item_height / 2) {
+            bool can_move = (evt->type == SGL_EVENT_MOVE_UP)
+                            ? ((dropdown->pos_y + dropdown->item_num * item_height) >= (list_h - item_height / 2))
+                            : (dropdown->pos_y < item_height / 2);
+            if (can_move) {
                 dropdown->pos_y += evt->distance;
             }
             sgl_obj_set_dirty(obj);

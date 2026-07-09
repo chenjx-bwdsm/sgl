@@ -111,6 +111,9 @@ static void sgl_textlist_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
                     select_coords.y2 = obj->coords.y2 - obj->border;
                     sgl_draw_fill_rect(surf, &select, &select_coords, obj->radius, textlist->item_selected_color, textlist->alpha);
                 }
+                else {
+                    sgl_draw_fill_rect(surf, &obj->area, &select, 0, textlist->item_selected_color, textlist->alpha);
+                }
             }
 
             sgl_draw_string(surf, &obj->area, text_pos_x1, text_pos_y, item->text, textlist->item_text_color, textlist->alpha, textlist->font);
@@ -126,19 +129,17 @@ static void sgl_textlist_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
     break;
 
     case SGL_EVENT_MOVE_UP:
-        if((textlist->pos_y + (textlist->item_num) * item_height) >= (list_h - item_height / 2)) {
-            textlist->pos_y -= evt->distance;
-        }
-        sgl_obj_set_dirty(obj);
-    break;
-
-    case SGL_EVENT_MOVE_DOWN:
-        if(textlist->pos_y < item_height / 2) {
+    case SGL_EVENT_MOVE_DOWN: {
+        bool can_move = (evt->type == SGL_EVENT_MOVE_UP)
+            ? ((textlist->pos_y + (textlist->item_num) * item_height) >= (list_h - item_height / 2))
+            : (textlist->pos_y < item_height / 2);
+        if (can_move) {
             textlist->pos_y += evt->distance;
         }
         sgl_obj_set_dirty(obj);
+    }
     break;
-    
+
     case SGL_EVENT_RELEASED:
         if (textlist->pos_y >= 0) {
             textlist->pos_y = 0;

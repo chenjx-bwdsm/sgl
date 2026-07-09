@@ -99,13 +99,13 @@ static void sgl_scroll_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_
     else if(evt->type == SGL_EVENT_MOVE_UP) {
         if (scroll->direct == SGL_DIRECT_VERTICAL && scroll->value > 0) {
             scroll->value --;
-            sgl_obj_move_child_pos_y(scroll->bind, -evt->distance);
+            sgl_obj_move_child_pos_y(scroll->bind, evt->distance);
         }
     }
     else if(evt->type == SGL_EVENT_MOVE_LEFT) {
         if (scroll->direct == SGL_DIRECT_HORIZONTAL && scroll->value > 0) {
             scroll->value --;
-            sgl_obj_move_child_pos_x(scroll->bind, -evt->distance);
+            sgl_obj_move_child_pos_x(scroll->bind, evt->distance);
         }
     }
     else if(evt->type == SGL_EVENT_MOVE_RIGHT) {

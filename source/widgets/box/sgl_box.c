@@ -122,7 +122,7 @@ static void sgl_box_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t *
         // Check if vertical scrolling is enabled
         if((box->scroll_mode & SGL_BOX_SCROLL_VERTICAL_ONLY) || (box->scroll_mode & SGL_BOX_SCROLL_BOTH)) {
             // Update text offset - determine scroll direction based on event type
-            int16_t distance = evt->type == SGL_EVENT_MOVE_UP ? -evt->distance : evt->distance;
+            int16_t distance = evt->distance;
             int16_t new_offset = box->y_offset + distance;
             
             // Calculate limits based on elastic_scroll values
@@ -157,7 +157,7 @@ static void sgl_box_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t *
         // Check if horizontal scrolling is enabled
         if((box->scroll_mode & SGL_BOX_SCROLL_HORIZONTAL_ONLY) || (box->scroll_mode & SGL_BOX_SCROLL_BOTH)) {
             // Update text offset - determine scroll direction based on event type
-            int16_t distance = evt->type == SGL_EVENT_MOVE_LEFT ? -evt->distance : evt->distance;
+            int16_t distance = evt->distance;
             int16_t new_offset = box->x_offset + distance;
             
             // Calculate limits based on elastic_scroll values

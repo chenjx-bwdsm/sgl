@@ -1836,6 +1836,14 @@ static inline void sgl_draw_task(sgl_fbdev_t *fbdev, sgl_area_t *dirty_area, uin
     /* dirty area number must less than SGL_DIRTY_AREA_MAX */
     for (uint8_t i = 0; i < dirty_num; i++) {
         dirty = &dirty_area[i];
+
+#if (CONFIG_SGL_FBDEV_EVEN_COORDS)
+        /* floor and ceil dirty area, it is for QSPI display*/
+        dirty->x1 = sgl_floor_even(dirty->x1);
+        dirty->y1 = sgl_floor_even(dirty->y1);
+        dirty->x2 = sgl_ceil_odd(dirty->x2);
+        dirty->y2 = sgl_ceil_odd(dirty->y2);
+#endif
         surf->dirty = dirty;
 
 #if (CONFIG_SGL_FBDEV_RUNTIME_ROTATION)
@@ -1853,12 +1861,11 @@ static inline void sgl_draw_task(sgl_fbdev_t *fbdev, sgl_area_t *dirty_area, uin
 
         uint16_t draw_h = 0;
         surf->h = dirty->y2 - dirty->y1 + 1;
-
         surf->x1 = dirty->x1;
         surf->y1 = dirty->y1;
         surf->x2 = dirty->x2;
         surf->w  = surf->x2 - surf->x1 + 1;
-        surf->h  = sgl_min(surf->size / surf->w, (uint32_t)(dirty->y2 - dirty->y1 + 1));
+        surf->h  = sgl_min(surf->size / surf->w, surf->h);
 
         while (surf->y1 <= dirty->y2) {
             draw_h = sgl_min(dirty->y2 - surf->y1 + 1, surf->h);
@@ -1875,7 +1882,6 @@ static inline void sgl_draw_task(sgl_fbdev_t *fbdev, sgl_area_t *dirty_area, uin
             surf->y1 += draw_h;
         }
 #else
-        SGL_LOG_TRACE("[fb:%d]sgl_draw_task: dirty area  x1:%d y1:%d x2:%d y2:%d", fbdev->fb_swap, dirty->x1, dirty->y1, dirty->x2, dirty->y2);
         /* wait current framebuffer for ready */
         while (sgl_fbdev_flush_wait_ready(fbdev));
         draw_obj_slice(head, surf);

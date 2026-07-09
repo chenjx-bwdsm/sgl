@@ -667,4 +667,24 @@ void sgl_anim_apply_obj_vert(sgl_obj_t *obj, int16_t distance, uint16_t duration
     sgl_anim_start(anim, SGL_ANIM_REPEAT_ONCE);
 }
 
+/**
+ * sgl_anim_run_once - Run an animation once
+ * @param start     Start value of the animation
+ * @param end       End value of the animation
+ * @param duration  Duration of the animation (in milliseconds)
+ * @param cb        Callback function for the animation
+ * @param effect    Animation path effect ()
+ * @return none
+ */
+void sgl_anim_run_once(int16_t start, int16_t end, uint16_t duration, sgl_anim_path_cb_t cb, sgl_anim_path_algo_t effect)
+{
+    sgl_anim_t *anim = sgl_anim_create();
+    sgl_anim_set_auto_free(anim);
+    sgl_anim_set_start_value(anim, start);
+    sgl_anim_set_end_value(anim, end);
+    sgl_anim_set_act_duration(anim, duration);
+    sgl_anim_set_path(anim, cb, effect);
+    sgl_anim_start(anim, SGL_ANIM_REPEAT_ONCE);
+}
+
 #endif // !CONFIG_SGL_ANIMATION

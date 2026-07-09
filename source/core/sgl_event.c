@@ -278,24 +278,12 @@ static void sgl_get_move_info(sgl_event_t *evt)
     int16_t dy = evt->pos.y - evt_ctx.last_touch.y;
 
     if (sgl_abs(dx) > sgl_abs(dy)) {
-        if (dx > 0) {
-            evt->type = SGL_EVENT_MOVE_RIGHT;
-            evt->distance = dx;
-        }
-        else {
-            evt->type = SGL_EVENT_MOVE_LEFT;
-            evt->distance = -dx;
-        }
+        evt->type = dx > 0 ? SGL_EVENT_MOVE_RIGHT : SGL_EVENT_MOVE_LEFT;
+        evt->distance = dx;
     }
     else {
-        if (dy > 0) {
-            evt->type = SGL_EVENT_MOVE_DOWN;
-            evt->distance = dy;
-        }
-        else {
-            evt->type = SGL_EVENT_MOVE_UP;
-            evt->distance = -dy;
-        }
+        evt->type = dy < 0 ? SGL_EVENT_MOVE_UP : SGL_EVENT_MOVE_DOWN;
+        evt->distance = dy;
     }
 
     evt_ctx.last_touch = evt->pos;
@@ -701,13 +689,14 @@ void sgl_key_group_load(sgl_key_group_t *group)
     if (group) {
         if (grp_active_is_focused()) {
             event_set_focus(grp_active_get_focused(), false);
-            key_grp_active->focused = -1;
             key_grp_active->editing = 0;
         }
 
         key_grp_active = group;
-        key_grp_active->focused = -1;
         key_grp_active->editing = 0;
+        if (grp_active_is_focused()) {
+            event_set_focus(grp_active_get_focused(), true);
+        }
     }
 }
 

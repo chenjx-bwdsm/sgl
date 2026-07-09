@@ -13,18 +13,14 @@ typedef struct sgl_launcher {
     int16_t margin_left;
     int16_t margin_top;
     int16_t margin_right;
-
     int16_t margin_bottom;
     int16_t grid_row;
     int16_t grid_col;
     int16_t page_width;
-
     int16_t page_height;
     int16_t drag_start_x;
     int16_t count;
     uint8_t page_count;
-    uint8_t current_page;
-
     sgl_color_t navigbar_color;
     sgl_color_t label_color;
     const sgl_font_t *font;

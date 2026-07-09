@@ -57,10 +57,15 @@ extern "C" {
 #define SGL_ARRAY_SIZE(array)                   (sizeof(array) / sizeof(array[0]))
 #endif
 
-#define SGL_ALIGN_UP(x, align)                  (((x) + ((align) - 1)) & ~((align) - 1))
-#define SGL_ROUND_UP(x, round)                  ((((x) + ((round) - 1)) / (round)) * (round))
+#define sgl_align_up(x, align)                  (((x) + ((align) - 1)) & ~((align) - 1))
+#define sgl_round_up(x, round)                  ((((x) + ((round) - 1)) / (round)) * (round))
 
 #define SGL_UNUSED(x)                           (void)(x)
+
+#define sgl_floor_even(n)                       ((n) & ~1U)
+#define sgl_ceil_even(n)                        (((n) + 1U) & ~1U)
+#define sgl_floor_odd(n)                        ((n) & 1U ? (n) : (n) - 1U)
+#define sgl_ceil_odd(n)                         ((n) | 1U)
 
 #define SGL_POS_INVALID                         (0xefff)
 #define SGL_POS_MAX                             (8192)

@@ -451,6 +451,17 @@ void sgl_anim_apply_obj_hori(sgl_obj_t *obj, int16_t distance, uint16_t duration
  */
 void sgl_anim_apply_obj_vert(sgl_obj_t *obj, int16_t distance, uint16_t duration, sgl_anim_path_algo_t effect);
 
+/**
+ * sgl_anim_run_once - Run an animation once
+ * @param start     Start value of the animation
+ * @param end       End value of the animation
+ * @param duration  Duration of the animation (in milliseconds)
+ * @param cb        Callback function for the animation
+ * @param effect    Animation path effect ()
+ * @return none
+ */
+void sgl_anim_run_once(int16_t start, int16_t end, uint16_t duration, sgl_anim_path_cb_t cb, sgl_anim_path_algo_t effect);
+
 #endif // ! CONFIG_SGL_ANIMATION
 
 #ifdef __cplusplus

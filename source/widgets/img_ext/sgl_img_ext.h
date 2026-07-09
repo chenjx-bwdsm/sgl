@@ -45,8 +45,8 @@ typedef struct sgl_img_ext {
     int16_t rotation;               /**< Rotation angle in degrees (0-360) */
     int32_t scale_x;                /**< X-axis scale factor (fixed-point) */
     int32_t scale_y;                /**< Y-axis scale factor (fixed-point) */
-    int32_t pivot_x;                /**< Rotation center X (image coords, 0,0 = top-left) */
-    int32_t pivot_y;                /**< Rotation center Y (image coords, 0,0 = top-left) */
+    int32_t pivot_x;                /**< Rotation/scale center X (image coords, default 0 = top-left) */
+    int32_t pivot_y;                /**< Rotation/scale center Y (image coords, default 0 = top-left) */
     int32_t orig_x1;                /**< Widget original top-left X (for pivot) */
     int32_t orig_y1;                /**< Widget original top-left Y (for pivot) */
     void (*read)(const size_t addr, uint8_t *out, uint32_t len_bytes); /**< Flash read callback */
