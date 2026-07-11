@@ -348,6 +348,34 @@ static uint32_t slfs_chain_append(slfs_ctx_t *ctx, uint32_t head)
     return new_block;
 }
 
+static int slfs_read_dir_stream(slfs_ctx_t *ctx, const slfs_inode_t *dir_inode,
+                                uint32_t byte_pos, uint8_t *buf, uint32_t len)
+{
+    uint32_t data_area = ctx->data_area_size;
+    uint32_t bytes_read = 0;
+
+    if (byte_pos >= dir_inode->size || len > dir_inode->size - byte_pos)
+        return SLFS_ERR_NOT_FOUND;
+
+    while (bytes_read < len) {
+        uint32_t stream_pos = byte_pos + bytes_read;
+        uint32_t block_idx = stream_pos / data_area;
+        uint32_t offset_in_block = stream_pos % data_area;
+        uint32_t block = slfs_chain_get(ctx, dir_inode->data_head, block_idx);
+        if (block == 0) return SLFS_ERR_NOT_FOUND;
+        if (slfs_cache_read(ctx, block) != SLFS_OK) return SLFS_ERR_IO;
+
+        uint32_t avail = data_area - offset_in_block;
+        uint32_t chunk = (len - bytes_read < avail) ? len - bytes_read : avail;
+        memcpy(buf + bytes_read,
+               ctx->blk_buf + sizeof(slfs_data_hdr_t) + offset_in_block,
+               chunk);
+        bytes_read += chunk;
+    }
+
+    return SLFS_OK;
+}
+
 /* Read a directory entry at a given byte position in the directory's data stream.
    Returns SLFS_OK if found, SLFS_ERR_NOT_FOUND at end. */
 static int slfs_read_dirent(slfs_ctx_t *ctx, uint32_t inode_idx,
@@ -359,48 +387,25 @@ static int slfs_read_dirent(slfs_ctx_t *ctx, uint32_t inode_idx,
         return SLFS_ERR_IO;
     if (dir_inode.type != SLFS_TYPE_DIR || dir_inode.data_head == 0)
         return SLFS_ERR_NOT_FOUND;
-
-    uint32_t data_area = ctx->data_area_size;
-    uint32_t block_idx = byte_pos / data_area;
-    uint32_t offset_in_block = byte_pos % data_area;
-
-    /* Check bounds */
-    if (byte_pos >= dir_inode.size) return SLFS_ERR_NOT_FOUND;
-
-    uint32_t block = slfs_chain_get(ctx, dir_inode.data_head, block_idx);
-    if (block == 0) return SLFS_ERR_NOT_FOUND;
-
-    if (slfs_cache_read(ctx, block) != SLFS_OK) return SLFS_ERR_IO;
-
-    /* Read dirent header */
-    uint8_t *p = ctx->blk_buf + sizeof(slfs_data_hdr_t) + offset_in_block;
-    if (offset_in_block + sizeof(slfs_dirent_t) > data_area)
+    if (byte_pos >= dir_inode.size)
         return SLFS_ERR_NOT_FOUND;
 
-    memcpy(dirent, p, sizeof(slfs_dirent_t));
-    p += sizeof(slfs_dirent_t);
-
+    int ret = slfs_read_dir_stream(ctx, &dir_inode, byte_pos,
+                                   (uint8_t *)dirent, sizeof(slfs_dirent_t));
+    if (ret != SLFS_OK) return ret;
     if (dirent->name_len == 0) return SLFS_ERR_NOT_FOUND; /* deleted */
 
-    /* Read name */
+    if (byte_pos + sizeof(slfs_dirent_t) + dirent->name_len > dir_inode.size)
+        return SLFS_ERR_NOT_FOUND;
+
     if (name_buf && name_buf_size > 0) {
         uint32_t copy_len = dirent->name_len;
         if (copy_len >= name_buf_size) copy_len = name_buf_size - 1;
 
-        /* Name might span across blocks */
-        uint32_t avail = data_area - offset_in_block - sizeof(slfs_dirent_t);
-        if (copy_len <= avail) {
-            memcpy(name_buf, p, copy_len);
-        } else {
-            memcpy(name_buf, p, avail);
-            /* Read next block for remaining name bytes */
-            uint32_t next_block;
-            memcpy(&next_block, ctx->blk_buf, 4);
-            if (next_block == 0) return SLFS_ERR_IO;
-            slfs_cache_read(ctx, next_block);
-            memcpy(name_buf + avail, ctx->blk_buf + sizeof(slfs_data_hdr_t),
-                   copy_len - avail);
-        }
+        ret = slfs_read_dir_stream(ctx, &dir_inode,
+                                   byte_pos + sizeof(slfs_dirent_t),
+                                   (uint8_t *)name_buf, copy_len);
+        if (ret != SLFS_OK) return ret;
         name_buf[copy_len] = '\0';
     }
     return SLFS_OK;
@@ -430,7 +435,7 @@ static uint32_t slfs_dir_find(slfs_ctx_t *ctx, uint32_t dir_inode,
         int ret = slfs_read_dirent(ctx, dir_inode, pos, &dirent,
                                    entry_name, sizeof(entry_name));
         if (ret != SLFS_OK) {
-            pos++;
+            pos += 1;
             continue;
         }
         if (dirent.name_len == name_len &&
@@ -468,13 +473,12 @@ static int slfs_append_data(slfs_ctx_t *ctx, uint32_t inode_idx,
             inode.data_count++;
 
             /* Initialize block header */
-            slfs_cache_read(ctx, block);
             memset(ctx->blk_buf, 0, ctx->block_size);
             uint32_t zero = 0;
             memcpy(ctx->blk_buf, &zero, 4);  /* next = 0 */
             memcpy(ctx->blk_buf + 4, &zero, 4); /* used_bytes = 0 */
             slfs_cache_dirty(ctx);
-            slfs_cache_flush(ctx);
+            if (slfs_cache_flush(ctx) != SLFS_OK) return SLFS_ERR_IO;
         } else {
             block = slfs_chain_get(ctx, inode.data_head, block_idx);
             if (block == 0) return SLFS_ERR_IO;
@@ -494,41 +498,56 @@ static int slfs_append_data(slfs_ctx_t *ctx, uint32_t inode_idx,
         if (used > old_used) memcpy(ctx->blk_buf + 4, &used, 4);
 
         slfs_cache_dirty(ctx);
-        slfs_cache_flush(ctx);
+        if (slfs_cache_flush(ctx) != SLFS_OK) return SLFS_ERR_IO;
 
         written += chunk;
     }
 
     inode.size += len;
-    slfs_write_inode(ctx, inode_idx, &inode);
-    return SLFS_OK;
+    return slfs_write_inode(ctx, inode_idx, &inode);
 }
 
 /* Write a directory entry into a directory inode. */
 static int slfs_resolve_path(slfs_ctx_t *ctx, const char *path,
-                             uint32_t *parent_inode, const char **final_name)
+                             uint32_t *parent_inode, char *final_name,
+                             uint32_t final_name_size, uint8_t *has_final_name)
 {
+    if (!path || !parent_inode || !final_name || final_name_size == 0 || !has_final_name)
+        return SLFS_ERR_INVALID;
+
     while (*path == '/') path++;
     if (*path == '\0') {
         *parent_inode = ctx->root_inode;
-        *final_name = NULL;
+        final_name[0] = '\0';
+        *has_final_name = 0;
         return SLFS_OK;
     }
 
     uint32_t cur = ctx->root_inode;
     char component[SLFS_MAX_NAME_LEN + 1];
 
+    *has_final_name = 0;
+    final_name[0] = '\0';
+
     while (*path) {
-        int i = 0;
-        while (*path && *path != '/' && i < SLFS_MAX_NAME_LEN) {
-            component[i++] = *path++;
+        uint32_t component_len = 0;
+        while (path[component_len] && path[component_len] != '/') {
+            if (component_len >= SLFS_MAX_NAME_LEN)
+                return SLFS_ERR_INVALID;
+            component[component_len] = path[component_len];
+            component_len++;
         }
-        component[i] = '\0';
+        component[component_len] = '\0';
+
+        path += component_len;
         while (*path == '/') path++;
 
         if (*path == '\0') {
+            if (component_len == 0 || component_len >= final_name_size)
+                return SLFS_ERR_INVALID;
+            memcpy(final_name, component, component_len + 1);
             *parent_inode = cur;
-            *final_name = path - i;
+            *has_final_name = 1;
             return SLFS_OK;
         }
 
@@ -540,7 +559,8 @@ static int slfs_resolve_path(slfs_ctx_t *ctx, const char *path,
     }
 
     *parent_inode = cur;
-    *final_name = NULL;
+    final_name[0] = '\0';
+    *has_final_name = 0;
     return SLFS_OK;
 }
 
@@ -548,12 +568,16 @@ static int slfs_resolve_path(slfs_ctx_t *ctx, const char *path,
 static int slfs_dir_add_entry(slfs_ctx_t *ctx, uint32_t dir_inode,
                               const char *name, uint8_t type, uint32_t child_inode)
 {
-    uint8_t name_len = (uint8_t)strlen(name);
+    uint32_t name_len = (uint32_t)strlen(name);
+    if (name_len == 0 || name_len > SLFS_MAX_NAME_LEN)
+        return SLFS_ERR_INVALID;
+
     uint32_t entry_size = sizeof(slfs_dirent_t) + name_len;
     uint8_t buf[sizeof(slfs_dirent_t) + SLFS_MAX_NAME_LEN];
+    if (entry_size > sizeof(buf)) return SLFS_ERR_INVALID;
 
     slfs_dirent_t dirent;
-    dirent.name_len = name_len;
+    dirent.name_len = (uint8_t)name_len;
     dirent.type = type;
     dirent.inode = child_inode;
     memcpy(buf, &dirent, sizeof(slfs_dirent_t));
@@ -585,10 +609,19 @@ static int slfs_dir_remove_entry(slfs_ctx_t *ctx, uint32_t dir_inode,
             uint32_t block = slfs_chain_get(ctx, dir.data_head, block_idx);
             if (block == 0) return SLFS_ERR_IO;
 
-            slfs_cache_read(ctx, block);
-            ctx->blk_buf[sizeof(slfs_data_hdr_t) + offset_in_data] = 0;
+            if (slfs_cache_read(ctx, block) != SLFS_OK) {
+                return SLFS_ERR_IO;
+            }
+
+            /* Tombstone the whole record so later scans do not read stale name bytes. */
+            slfs_dirent_t tombstone;
+            memset(&tombstone, 0, sizeof(tombstone));
+            memcpy(ctx->blk_buf + sizeof(slfs_data_hdr_t) + offset_in_data, &tombstone, sizeof(tombstone));
             slfs_cache_dirty(ctx);
-            slfs_cache_flush(ctx);
+
+            if (slfs_cache_flush(ctx) != SLFS_OK) {
+                return SLFS_ERR_IO;
+            }
             return SLFS_OK;
         }
         if (ret == SLFS_OK) {
@@ -673,13 +706,13 @@ static int slfs_write_file_data(slfs_ctx_t *ctx, uint32_t inode_idx,
             if (block == 0) return bytes_written > 0 ? (int)bytes_written : SLFS_ERR_NO_SPACE;
             if (inode.data_head == 0) inode.data_head = block;
             inode.data_count++;
-            slfs_cache_read(ctx, block);
+            if (slfs_cache_read(ctx, block) != SLFS_OK) return bytes_written > 0 ? (int)bytes_written : SLFS_ERR_IO;
             memset(ctx->blk_buf, 0, ctx->block_size);
             uint32_t zero = 0;
             memcpy(ctx->blk_buf, &zero, 4);
             memcpy(ctx->blk_buf + 4, &zero, 4);
             slfs_cache_dirty(ctx);
-            slfs_cache_flush(ctx);
+            if (slfs_cache_flush(ctx) != SLFS_OK) return bytes_written > 0 ? (int)bytes_written : SLFS_ERR_IO;
         } else {
             block = slfs_chain_get(ctx, inode.data_head, block_idx);
             if (block == 0) break;
@@ -697,17 +730,16 @@ static int slfs_write_file_data(slfs_ctx_t *ctx, uint32_t inode_idx,
         memcpy(&old_used, ctx->blk_buf + 4, 4);
         if (used > old_used) memcpy(ctx->blk_buf + 4, &used, 4);
         slfs_cache_dirty(ctx);
-        slfs_cache_flush(ctx);
+        if (slfs_cache_flush(ctx) != SLFS_OK) return bytes_written > 0 ? (int)bytes_written : SLFS_ERR_IO;
 
         bytes_written += chunk;
         uint32_t new_end = offset + bytes_written;
         if (new_end > inode.size) inode.size = new_end;
     }
 
-    slfs_write_inode(ctx, inode_idx, &inode);
+    if (slfs_write_inode(ctx, inode_idx, &inode) != SLFS_OK) return SLFS_ERR_IO;
     return (int)bytes_written;
 }
-
 
 static int littlefs_format(void *fs);
 
@@ -764,14 +796,22 @@ static int littlefs_mount(void **fs, sgl_block_dev_t *dev,
 
     /* Auto-detect block count */
     uint32_t sector_count = 0;
-    if (sgl_block_dev_ioctl(dev, SGL_BLK_GET_SECTOR_COUNT, &sector_count) == 0 && sector_count != 0) {
-        ctx->block_count = sector_count;
-    } else if (dev->info && dev->info->sector_count != 0) {
-        ctx->block_count = dev->info->sector_count;
-    } else {
-        SGL_LOG_ERROR(LFS_FS_NAME " mount: failed to get sector count");
+    if (sgl_block_dev_ioctl(dev, SGL_BLK_GET_SECTOR_COUNT, &sector_count) != 0 || sector_count == 0) {
+        if (dev->info && dev->info->sector_count != 0) {
+            sector_count = dev->info->sector_count;
+        } else {
+            SGL_LOG_ERROR(LFS_FS_NAME " mount: failed to get sector count");
+            sgl_free(ctx);
+            return SLFS_ERR_IO;
+        }
+    }
+
+    uint32_t sectors_per_block = fs_block_size / sector_size;
+    ctx->block_count = sector_count / sectors_per_block;
+    if (ctx->block_count == 0) {
+        SGL_LOG_ERROR(LFS_FS_NAME " mount: no available fs blocks");
         sgl_free(ctx);
-        return SLFS_ERR_IO;
+        return SLFS_ERR_INVAL;
     }
 
     ctx->blk_buf = (uint8_t *)sgl_malloc(fs_block_size);
@@ -860,13 +900,15 @@ static int littlefs_open(void *fs, const char *path, uint32_t flags)
     }
 
     uint32_t parent_inode;
-    const char *fname;
-    int ret = slfs_resolve_path(ctx, path, &parent_inode, &fname);
+    char fname[SLFS_MAX_NAME_LEN + 1];
+    uint8_t has_fname;
+    int ret = slfs_resolve_path(ctx, path, &parent_inode, fname,
+                                sizeof(fname), &has_fname);
     if (ret != SLFS_OK) {
         SGL_LOG_ERROR(LFS_FS_NAME " open: resolve_path failed, ret=%d", ret);
         return ret;
     }
-    if (fname == NULL) {
+    if (!has_fname) {
         SGL_LOG_ERROR(LFS_FS_NAME " open: fname is NULL");
         return SLFS_ERR_INVALID;
     }
@@ -905,7 +947,11 @@ static int littlefs_open(void *fs, const char *path, uint32_t flags)
         inode.type = SLFS_TYPE_FILE;
         inode.parent_inode = parent_inode;
         slfs_write_inode(ctx, found, &inode);
-        slfs_dir_add_entry(ctx, parent_inode, fname, SLFS_TYPE_FILE, found);
+        ret = slfs_dir_add_entry(ctx, parent_inode, fname, SLFS_TYPE_FILE, found);
+        if (ret != SLFS_OK) {
+            slfs_free_inode(ctx, found);
+            return ret;
+        }
     }
 
     slfs_file_t *f = &ctx->files[slot];
@@ -990,15 +1036,17 @@ static int littlefs_opendir(void *fs, const char *path, int *dd)
     }
 
     uint32_t parent_inode;
-    const char *fname;
-    int ret = slfs_resolve_path(ctx, path, &parent_inode, &fname);
+    char fname[SLFS_MAX_NAME_LEN + 1];
+    uint8_t has_fname;
+    int ret = slfs_resolve_path(ctx, path, &parent_inode, fname,
+                                sizeof(fname), &has_fname);
     if (ret != SLFS_OK) {
         SGL_LOG_ERROR(LFS_FS_NAME " opendir: resolve_path failed, ret=%d", ret);
         return ret;
     }
 
     uint32_t dir_inode;
-    if (fname == NULL) {
+    if (!has_fname) {
         dir_inode = parent_inode;
     } else {
         uint8_t type = 0;
@@ -1014,7 +1062,10 @@ static int littlefs_opendir(void *fs, const char *path, int *dd)
     }
 
     slfs_dir_t *d = &ctx->dirs[slot];
-    d->used = 1; d->inode_idx = dir_inode; d->entry_pos = 0; d->finished = 0;
+    d->used = 1;
+    d->inode_idx = dir_inode;
+    d->entry_pos = 0;
+    d->finished = 0;
     *dd = slot;
     return SLFS_OK;
 }
@@ -1050,8 +1101,11 @@ static int littlefs_readdir(void *fs, int dd, char *name,
             if (type) *type = (dirent.type == SLFS_TYPE_DIR) ? SGL_S_IFDIR : SGL_S_IFREG;
             return 1;
         }
-        if (ret == SLFS_OK) d->entry_pos += slfs_dirent_total_size(dirent.name_len);
-        else d->entry_pos++;
+        if (ret == SLFS_OK) {
+            d->entry_pos += slfs_dirent_total_size(dirent.name_len);
+        } else {
+            d->entry_pos++;
+        }
     }
     d->finished = 1;
     return 0;
@@ -1167,10 +1221,12 @@ static int littlefs_remove(void *fs, const char *path)
 {
     slfs_ctx_t *ctx = (slfs_ctx_t *)fs;
     uint32_t parent_inode;
-    const char *fname;
-    int ret = slfs_resolve_path(ctx, path, &parent_inode, &fname);
+    char fname[SLFS_MAX_NAME_LEN + 1];
+    uint8_t has_fname;
+    int ret = slfs_resolve_path(ctx, path, &parent_inode, fname,
+                                sizeof(fname), &has_fname);
     if (ret != SLFS_OK) return ret;
-    if (fname == NULL) return SLFS_ERR_INVALID;
+    if (!has_fname) return SLFS_ERR_INVALID;
 
     uint8_t type = 0;
     uint32_t found = slfs_dir_find(ctx, parent_inode, fname, &type);
@@ -1180,8 +1236,12 @@ static int littlefs_remove(void *fs, const char *path)
         if (!slfs_dir_is_empty(ctx, found)) return SLFS_ERR_NOT_EMPTY;
     }
 
-    slfs_dir_remove_entry(ctx, parent_inode, fname);
-    slfs_free_inode(ctx, found);
+    if (slfs_dir_remove_entry(ctx, parent_inode, fname) != SLFS_OK) {
+        return SLFS_ERR_IO;
+    }
+    if (slfs_free_inode(ctx, found) != SLFS_OK) {
+        return SLFS_ERR_IO;
+    }
     return SLFS_OK;
 }
 
@@ -1189,10 +1249,12 @@ static int littlefs_mkdir(void *fs, const char *path)
 {
     slfs_ctx_t *ctx = (slfs_ctx_t *)fs;
     uint32_t parent_inode;
-    const char *fname;
-    int ret = slfs_resolve_path(ctx, path, &parent_inode, &fname);
+    char fname[SLFS_MAX_NAME_LEN + 1];
+    uint8_t has_fname;
+    int ret = slfs_resolve_path(ctx, path, &parent_inode, fname,
+                                sizeof(fname), &has_fname);
     if (ret != SLFS_OK) return ret;
-    if (fname == NULL) return SLFS_ERR_INVALID;
+    if (!has_fname) return SLFS_ERR_INVALID;
 
     uint8_t type = 0;
     if (slfs_dir_find(ctx, parent_inode, fname, &type) != 0)
@@ -1205,7 +1267,10 @@ static int littlefs_mkdir(void *fs, const char *path)
     slfs_read_inode(ctx, new_inode, &inode);
     inode.type = SLFS_TYPE_DIR;
     inode.parent_inode = parent_inode;
-    slfs_write_inode(ctx, new_inode, &inode);
+    if (slfs_write_inode(ctx, new_inode, &inode) != SLFS_OK) {
+        slfs_free_inode(ctx, new_inode);
+        return SLFS_ERR_IO;
+    }
 
     ret = slfs_dir_add_entry(ctx, parent_inode, fname, SLFS_TYPE_DIR, new_inode);
     if (ret != SLFS_OK) {
@@ -1221,11 +1286,13 @@ static int littlefs_stat(void *fs, const char *path, sgl_stat_t *st)
     if (!st) return SLFS_ERR_INVAL;
 
     uint32_t parent_inode;
-    const char *fname;
-    int ret = slfs_resolve_path(ctx, path, &parent_inode, &fname);
+    char fname[SLFS_MAX_NAME_LEN + 1];
+    uint8_t has_fname;
+    int ret = slfs_resolve_path(ctx, path, &parent_inode, fname,
+                                sizeof(fname), &has_fname);
     if (ret != SLFS_OK) return ret;
 
-    if (fname == NULL) {
+    if (!has_fname) {
         memset(st, 0, sizeof(sgl_stat_t));
         st->st_mode = SGL_S_IFDIR | SGL_S_IRWXU | SGL_S_IRWXG | SGL_S_IRWXO;
         return SLFS_OK;
@@ -1252,15 +1319,20 @@ static int littlefs_rename(void *fs, const char *old_path, const char *new_path)
 {
     slfs_ctx_t *ctx = (slfs_ctx_t *)fs;
     uint32_t old_parent, new_parent;
-    const char *old_name, *new_name;
+    char old_name[SLFS_MAX_NAME_LEN + 1];
+    char new_name[SLFS_MAX_NAME_LEN + 1];
+    uint8_t has_old_name;
+    uint8_t has_new_name;
 
-    int ret = slfs_resolve_path(ctx, old_path, &old_parent, &old_name);
+    int ret = slfs_resolve_path(ctx, old_path, &old_parent, old_name,
+                                sizeof(old_name), &has_old_name);
     if (ret != SLFS_OK) return ret;
-    if (old_name == NULL) return SLFS_ERR_INVALID;
+    if (!has_old_name) return SLFS_ERR_INVALID;
 
-    ret = slfs_resolve_path(ctx, new_path, &new_parent, &new_name);
+    ret = slfs_resolve_path(ctx, new_path, &new_parent, new_name,
+                            sizeof(new_name), &has_new_name);
     if (ret != SLFS_OK) return ret;
-    if (new_name == NULL) return SLFS_ERR_INVALID;
+    if (!has_new_name) return SLFS_ERR_INVALID;
 
     uint8_t type = 0;
     uint32_t found = slfs_dir_find(ctx, old_parent, old_name, &type);
@@ -1270,14 +1342,22 @@ static int littlefs_rename(void *fs, const char *old_path, const char *new_path)
     uint8_t new_type = 0;
     uint32_t existing = slfs_dir_find(ctx, new_parent, new_name, &new_type);
     if (existing != 0) {
-        slfs_dir_remove_entry(ctx, new_parent, new_name);
-        slfs_free_inode(ctx, existing);
+        if (slfs_dir_remove_entry(ctx, new_parent, new_name) != SLFS_OK) {
+            return SLFS_ERR_IO;
+        }
+        if (slfs_free_inode(ctx, existing) != SLFS_OK) {
+            return SLFS_ERR_IO;
+        }
     }
 
     /* Add new entry */
-    slfs_dir_add_entry(ctx, new_parent, new_name, type, found);
+    if (slfs_dir_add_entry(ctx, new_parent, new_name, type, found) != SLFS_OK) {
+        return SLFS_ERR_IO;
+    }
     /* Remove old entry */
-    slfs_dir_remove_entry(ctx, old_parent, old_name);
+    if (slfs_dir_remove_entry(ctx, old_parent, old_name) != SLFS_OK) {
+        return SLFS_ERR_IO;
+    }
     return SLFS_OK;
 }
 

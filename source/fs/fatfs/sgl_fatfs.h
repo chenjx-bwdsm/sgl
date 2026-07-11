@@ -26,6 +26,8 @@
 
 #include <sgl_fs.h>
 
+#define SGL_FATFS_MAX_LFN      (32)
+
 #ifdef __cplusplus
 extern "C" {
 #endif

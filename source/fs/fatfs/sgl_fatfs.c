@@ -47,6 +47,13 @@
 #define FAT_ENTRY_END       0x00
 #define FAT_DIR_ENTRY_SIZE  32
 
+#define FAT_LFN_LAST         0x40
+#define FAT_LFN_ATTR        0x0F
+#define FAT_LFN_NAME1_LEN   5
+#define FAT_LFN_NAME2_LEN   6
+#define FAT_LFN_NAME3_LEN   2
+#define FAT_LFN_CHARS       (FAT_LFN_NAME1_LEN + FAT_LFN_NAME2_LEN + FAT_LFN_NAME3_LEN)
+
 #define FAT12_EOC_MIN       0xFF8
 #define FAT16_EOC_MIN       0xFFF8
 #define FAT32_EOC_MIN       0x0FFFFFF8
@@ -99,6 +106,8 @@ typedef struct {
     uint32_t start_cluster;      /* first cluster of the directory */
     uint32_t cur_cluster;        /* current cluster being read */
     uint32_t entry_index;        /* next entry index to read */
+    uint8_t  lfn_valid;
+    char     lfn_name[SGL_FATFS_MAX_LFN * 3 + 1]; /* reconstructed UTF-8 long file name */
     uint8_t  finished;           /* end of directory reached */
 } fat_dir_t;
 
@@ -138,6 +147,109 @@ static uint16_t rd16(const uint8_t *p) { return (uint16_t)p[0] | ((uint16_t)p[1]
 static uint32_t rd32(const uint8_t *p) { return (uint32_t)p[0] | ((uint32_t)p[1]<<8) | ((uint32_t)p[2]<<16) | ((uint32_t)p[3]<<24); }
 static void wr16(uint8_t *p, uint16_t v) { p[0]=v&0xFF; p[1]=(v>>8)&0xFF; }
 static void wr32(uint8_t *p, uint32_t v) { p[0]=v&0xFF; p[1]=(v>>8)&0xFF; p[2]=(v>>16)&0xFF; p[3]=(v>>24)&0xFF; }
+
+static size_t fat_utf8_decode(const char *s, uint16_t *out)
+{
+    const unsigned char *p = (const unsigned char *)s;
+    if (p[0] < 0x80) {
+        *out = p[0];
+        return 1;
+    }
+    if ((p[0] & 0xE0) == 0xC0 && (p[1] & 0xC0) == 0x80) {
+        *out = (uint16_t)(((p[0] & 0x1F) << 6) | (p[1] & 0x3F));
+        return 2;
+    }
+    if ((p[0] & 0xF0) == 0xE0 && (p[1] & 0xC0) == 0x80 && (p[2] & 0xC0) == 0x80) {
+        *out = (uint16_t)(((p[0] & 0x0F) << 12) | ((p[1] & 0x3F) << 6) | (p[2] & 0x3F));
+        return 3;
+    }
+    *out = '?';
+    return 1;
+}
+
+static size_t fat_utf8_encode(uint16_t ch, char *out)
+{
+    if (ch < 0x80) {
+        out[0] = (char)ch;
+        return 1;
+    }
+    if (ch < 0x800) {
+        out[0] = (char)(0xC0 | (ch >> 6));
+        out[1] = (char)(0x80 | (ch & 0x3F));
+        return 2;
+    }
+    out[0] = (char)(0xE0 | (ch >> 12));
+    out[1] = (char)(0x80 | ((ch >> 6) & 0x3F));
+    out[2] = (char)(0x80 | (ch & 0x3F));
+    return 3;
+}
+
+static uint8_t fat_lfn_checksum(const uint8_t short_name[11])
+{
+    uint8_t sum = 0;
+    for (int i = 0; i < 11; i++) {
+        sum = (uint8_t)(((sum & 1) ? 0x80 : 0) + (sum >> 1) + short_name[i]);
+    }
+    return sum;
+}
+
+static int fat_utf8_to_ucs2(const char *name, uint16_t *out, size_t max_chars)
+{
+    size_t count = 0;
+    while (*name) {
+        if (count >= max_chars) return -1;
+        uint16_t ch = 0;
+        size_t used = fat_utf8_decode(name, &ch);
+        out[count++] = ch;
+        name += used;
+    }
+    return (int)count;
+}
+
+static int fat_ucs2_to_utf8(const uint16_t *name, size_t count, char *out, size_t out_size)
+{
+    size_t pos = 0;
+    for (size_t i = 0; i < count; i++) {
+        uint16_t ch = name[i];
+        if (ch == 0x0000 || ch == 0xFFFF) break;
+        if (pos + 4 >= out_size) break;
+        pos += fat_utf8_encode(ch, &out[pos]);
+    }
+    if (out_size > 0) out[pos < out_size ? pos : out_size - 1] = '\0';
+    return (int)pos;
+}
+
+static int fat_name_needs_lfn(const char *name)
+{
+    size_t base_len = 0;
+    size_t ext_len = 0;
+    int seen_dot = 0;
+
+    if (!name || name[0] == '\0' || name[0] == '.') return 1;
+
+    for (const unsigned char *p = (const unsigned char *)name; *p; p++) {
+        unsigned char ch = *p;
+        if (ch >= 0x80 || ch == ' ' || ch == '+' || ch == ',' || ch == ';' ||
+            ch == '=' || ch == '[' || ch == ']') {
+            return 1;
+        }
+        if (ch >= 'a' && ch <= 'z') return 1;
+        if (ch == '.') {
+            if (seen_dot || base_len == 0) return 1;
+            seen_dot = 1;
+            continue;
+        }
+        if (!seen_dot) {
+            base_len++;
+            if (base_len > 8) return 1;
+        } else {
+            ext_len++;
+            if (ext_len > 3) return 1;
+        }
+    }
+
+    return base_len == 0;
+}
 
 /**
  * @brief FatFS default configuration.
@@ -356,6 +468,97 @@ static uint32_t fat_chain_get(fat_ctx_t *ctx, uint32_t start, uint32_t index)
     return (cur >= 2 && !is_eoc(ctx, cur)) ? cur : (index == 0 ? start : 0);
 }
 
+static int fat_read_dir_entry(fat_ctx_t *ctx, uint32_t dir_cluster,
+                              uint32_t index, fat_dir_entry_t *entry,
+                              uint32_t *out_sector, uint16_t *out_offset);
+static int fat_write_dir_entry(fat_ctx_t *ctx, uint32_t sector, uint16_t offset,
+                               const fat_dir_entry_t *entry);
+
+static int fat_decode_lfn_name(const uint16_t *ucs2, size_t count, char *out, size_t out_size)
+{
+    return fat_ucs2_to_utf8(ucs2, count, out, out_size);
+}
+
+static int fat_collect_lfn_name(fat_ctx_t *ctx, uint32_t dir_cluster, uint32_t start_index,
+                                char *out, size_t out_size, uint32_t *next_index)
+{
+    uint16_t parts[SGL_FATFS_MAX_LFN + FAT_LFN_CHARS];
+    uint8_t expected_seq = 0;
+    uint8_t checksum = 0;
+    size_t max_chars = 0;
+    uint32_t i = start_index;
+
+    memset(parts, 0xFF, sizeof(parts));
+
+    while (1) {
+        fat_dir_entry_t e;
+        uint32_t sec; uint16_t off;
+        int ret = fat_read_dir_entry(ctx, dir_cluster, i, &e, &sec, &off);
+        if (ret != FAT_OK) return ret;
+        if (e.name[0] == FAT_ENTRY_END) return FAT_ERR_NOT_FOUND;
+        if (e.name[0] == FAT_ENTRY_FREE) {
+            i++;
+            expected_seq = 0;
+            continue;
+        }
+        if (!(e.attr & FAT_ATTR_LONG_NAME)) break;
+
+        const uint8_t *raw = (const uint8_t *)&e;
+        uint8_t seq = raw[0] & 0x1F;
+        if (raw[0] & FAT_LFN_LAST) {
+            expected_seq = seq;
+            checksum = raw[13];
+        }
+        if (expected_seq == 0 || seq != expected_seq) {
+            expected_seq = 0;
+            i++;
+            continue;
+        }
+        if (raw[13] != checksum) {
+            expected_seq = 0;
+            i++;
+            continue;
+        }
+
+        size_t seq_index = (size_t)(seq - 1);
+        size_t base = seq_index * FAT_LFN_CHARS;
+        if (base + FAT_LFN_CHARS > SGL_FATFS_MAX_LFN + FAT_LFN_CHARS) {
+            expected_seq = 0;
+            i++;
+            continue;
+        }
+
+        uint16_t seq_name[13] = {
+            rd16(&raw[1]), rd16(&raw[3]), rd16(&raw[5]), rd16(&raw[7]), rd16(&raw[9]),
+            rd16(&raw[14]), rd16(&raw[16]), rd16(&raw[18]), rd16(&raw[20]), rd16(&raw[22]),
+            rd16(&raw[24]), rd16(&raw[28]), rd16(&raw[30])
+        };
+        for (size_t k = 0; k < 13; k++) {
+            parts[base + k] = seq_name[k];
+        }
+        if (seq_index + 1 > max_chars) {
+            max_chars = (seq_index + 1) * FAT_LFN_CHARS;
+        }
+
+        if (seq == 1) {
+            size_t begin = 0;
+            while (begin < max_chars && parts[begin] == 0xFFFF) begin++;
+            size_t end = max_chars;
+            while (end > begin && parts[end - 1] == 0xFFFF) end--;
+            if (end > begin) {
+                fat_decode_lfn_name(&parts[begin], end - begin, out, out_size);
+            } else if (out_size > 0) {
+                out[0] = '\0';
+            }
+            if (next_index) *next_index = i + 1;
+            return FAT_OK;
+        }
+        expected_seq--;
+        i++;
+    }
+    return FAT_ERR_NOT_FOUND;
+}
+
 /* Convert a filename component to 8.3 format (space-padded, uppercase) */
 static void name_to_83(const char *name, uint8_t out[11])
 {
@@ -487,14 +690,36 @@ static int fat_find_in_dir(fat_ctx_t *ctx, uint32_t dir_cluster,
     uint8_t target[11];
     name_to_83(name, target);
 
-    for (uint32_t i = 0; ; i++) {
+    for (uint32_t i = 0; ; ) {
         fat_dir_entry_t e;
         uint32_t sec; uint16_t off;
         int ret = fat_read_dir_entry(ctx, dir_cluster, i, &e, &sec, &off);
         if (ret != FAT_OK) return ret;
         if (e.name[0] == FAT_ENTRY_END) return FAT_ERR_NOT_FOUND;
-        if (e.name[0] == FAT_ENTRY_FREE) continue;
-        if (e.attr & FAT_ATTR_LONG_NAME) continue;
+        if (e.name[0] == FAT_ENTRY_FREE) {
+            i++;
+            continue;
+        }
+        if (e.attr & FAT_ATTR_LONG_NAME) {
+            char lfn_name[SGL_FATFS_MAX_LFN * 3 + 1];
+            uint32_t short_index = 0;
+            if (fat_collect_lfn_name(ctx, dir_cluster, i, lfn_name, sizeof(lfn_name), &short_index) == FAT_OK) {
+                if (fat_read_dir_entry(ctx, dir_cluster, short_index, &e, &sec, &off) != FAT_OK) {
+                    return FAT_ERR_IO;
+                }
+                if (strcmp(lfn_name, name) == 0 || memcmp(e.name, target, 11) == 0) {
+                    *entry = e;
+                    if (out_sector) *out_sector = sec;
+                    if (out_offset) *out_offset = off;
+                    return FAT_OK;
+                }
+                i = short_index + 1;
+                continue;
+            }
+            i++;
+            continue;
+        }
+        i++;
         if (e.attr & FAT_ATTR_VOLUME_ID) continue;
         if (memcmp(e.name, target, 11) == 0) {
             *entry = e;
@@ -505,66 +730,84 @@ static int fat_find_in_dir(fat_ctx_t *ctx, uint32_t dir_cluster,
     }
 }
 
-/* Find a free directory entry slot in a directory */
-static int fat_find_free_entry(fat_ctx_t *ctx, uint32_t dir_cluster,
-                               uint32_t *out_sector, uint16_t *out_offset)
+static int fat_extend_directory(fat_ctx_t *ctx, uint32_t dir_cluster)
 {
-    if (dir_cluster == 0) {
-        /* FAT12/16 root: limited entries, cannot grow */
-        for (uint32_t i = 0; i < ctx->root_entry_count; i++) {
-            fat_dir_entry_t e;
-            uint32_t sec; uint16_t off;
-            int r = fat_read_dir_entry(ctx, 0, i, &e, &sec, &off);
-            if (r != FAT_OK) {
-                SGL_LOG_ERROR(FAT_FS_NAME " find_free_entry: root entry %d read failed", (int)i);
-                return FAT_ERR_NO_SPACE;
-            }
-            if (e.name[0] == FAT_ENTRY_FREE || e.name[0] == FAT_ENTRY_END) {
-                *out_sector = sec;
-                *out_offset = off;
-                return FAT_OK;
-            }
-        }
-        SGL_LOG_ERROR(FAT_FS_NAME " find_free_entry: root dir full");
-        return FAT_ERR_NO_SPACE;
+    if (dir_cluster == 0) return FAT_ERR_NO_SPACE;
+
+    uint32_t new_clust = fat_alloc_cluster(ctx);
+    if (new_clust == 0) return FAT_ERR_NO_SPACE;
+
+    uint32_t base = cluster_to_sector(ctx, new_clust);
+    memset(ctx->sec_buf, 0, ctx->sector_size);
+    for (uint8_t s = 0; s < ctx->cluster_size; s++) {
+        if (fat_write_sector(ctx, base + s, ctx->sec_buf) != 0) return FAT_ERR_IO;
     }
 
-    /* Cluster-based directory: search and extend if needed */
-    for (uint32_t i = 0; ; i++) {
-        fat_dir_entry_t e;
-        uint32_t sec; uint16_t off;
-        int ret = fat_read_dir_entry(ctx, dir_cluster, i, &e, &sec, &off);
-        if (ret != FAT_OK) {
-            /* Chain ended — extend directory by one cluster */
-            uint32_t new_clust = fat_alloc_cluster(ctx);
-            if (new_clust == 0) {
-                SGL_LOG_ERROR(FAT_FS_NAME " find_free_entry: alloc cluster failed");
-                return FAT_ERR_NO_SPACE;
-            }
-            /* Zero the new cluster */
-            uint32_t base = cluster_to_sector(ctx, new_clust);
-            memset(ctx->sec_buf, 0, ctx->sector_size);
-            for (uint8_t s = 0; s < ctx->cluster_size; s++) {
-                fat_write_sector(ctx, base + s, ctx->sec_buf);
-            }
-            /* Link to end of chain */
-            uint32_t cur = dir_cluster;
-            while (!is_eoc(ctx, fat_get_entry(ctx, cur))) {
-                cur = fat_get_entry(ctx, cur);
-            }
-            uint32_t eoc = (ctx->fat_type == FAT_TYPE_12) ? 0xFFF :
-                           (ctx->fat_type == FAT_TYPE_16) ? 0xFFFF : 0x0FFFFFFF;
-            fat_set_entry(ctx, cur, new_clust);
-            fat_set_entry(ctx, new_clust, eoc);
-            /* Retry */
-            return fat_find_free_entry(ctx, dir_cluster, out_sector, out_offset);
-        }
-        if (e.name[0] == FAT_ENTRY_FREE || e.name[0] == FAT_ENTRY_END) {
-            *out_sector = sec;
-            *out_offset = off;
-            return FAT_OK;
-        }
+    uint32_t cur = dir_cluster;
+    while (!is_eoc(ctx, fat_get_entry(ctx, cur))) {
+        cur = fat_get_entry(ctx, cur);
     }
+    uint32_t eoc = (ctx->fat_type == FAT_TYPE_12) ? 0xFFF :
+                   (ctx->fat_type == FAT_TYPE_16) ? 0xFFFF : 0x0FFFFFFF;
+    fat_set_entry(ctx, cur, new_clust);
+    fat_set_entry(ctx, new_clust, eoc);
+    return FAT_OK;
+}
+
+static int fat_find_free_entries(fat_ctx_t *ctx, uint32_t dir_cluster,
+                                 uint32_t needed, uint32_t *out_index)
+{
+    uint32_t run_start = 0;
+    uint32_t run_count = 0;
+
+    for (uint32_t i = 0; ; i++) {
+        fat_dir_entry_t entry;
+        int ret = fat_read_dir_entry(ctx, dir_cluster, i, &entry, NULL, NULL);
+        if (ret != FAT_OK) {
+            if (dir_cluster == 0) return FAT_ERR_NO_SPACE;
+            ret = fat_extend_directory(ctx, dir_cluster);
+            if (ret != FAT_OK) return ret;
+            i--;
+            continue;
+        }
+
+        if (entry.name[0] == FAT_ENTRY_FREE || entry.name[0] == FAT_ENTRY_END) {
+            if (run_count == 0) run_start = i;
+            run_count++;
+            if (run_count >= needed) {
+                *out_index = run_start;
+                return FAT_OK;
+            }
+            continue;
+        }
+
+        run_count = 0;
+    }
+}
+
+static int fat_write_dir_entry_by_index(fat_ctx_t *ctx, uint32_t dir_cluster,
+                                        uint32_t index, const fat_dir_entry_t *entry,
+                                        uint32_t *out_sector, uint16_t *out_offset)
+{
+    fat_dir_entry_t old_entry;
+    uint32_t sec;
+    uint16_t off;
+    int ret = fat_read_dir_entry(ctx, dir_cluster, index, &old_entry, &sec, &off);
+    if (ret != FAT_OK) return ret;
+    ret = fat_write_dir_entry(ctx, sec, off, entry);
+    if (ret == FAT_OK) {
+        if (out_sector) *out_sector = sec;
+        if (out_offset) *out_offset = off;
+    }
+    return ret;
+}
+
+static void fat_lfn_write_char(uint8_t raw[32], int index, uint16_t value)
+{
+    static const uint8_t offsets[FAT_LFN_CHARS] = {
+        1, 3, 5, 7, 9, 14, 16, 18, 20, 22, 24, 28, 30
+    };
+    wr16(&raw[offsets[index]], value);
 }
 
 /* Resolve a path to its parent directory cluster and the final name component.
@@ -573,35 +816,39 @@ static int fat_find_free_entry(fat_ctx_t *ctx, uint32_t dir_cluster,
 static int fat_resolve_path(fat_ctx_t *ctx, const char *path,
                             uint32_t *parent_cluster, const char **final_name)
 {
-    /* Skip leading slash */
     while (*path == '/') path++;
     if (*path == '\0') {
-        /* Root directory itself */
         *parent_cluster = root_cluster(ctx);
         *final_name = NULL;
         return FAT_OK;
     }
 
     uint32_t cur_dir = root_cluster(ctx);
-    char component[13]; /* max 8.3 name + null */
+    char component[SGL_FATFS_MAX_LFN * 3 + 1];
 
     while (*path) {
-        /* Extract next component */
-        int i = 0;
-        while (*path && *path != '/' && i < 12) {
-            component[i++] = *path++;
+        const char *component_start = path;
+        size_t component_len = 0;
+        while (path[component_len] && path[component_len] != '/') {
+            component_len++;
         }
-        component[i] = '\0';
+        if (component_len == 0 || component_len >= sizeof(component)) {
+            return FAT_ERR_INVALID;
+        }
+
+        const char *separator = path + component_len;
+        path = separator;
         while (*path == '/') path++;
 
-        if (*path == '\0') {
-            /* This is the final component */
+        if (*path == '\0' && *separator != '/') {
             *parent_cluster = cur_dir;
-            *final_name = path - i; /* point back to start of component */
+            *final_name = component_start;
             return FAT_OK;
         }
 
-        /* Intermediate component: must be a directory */
+        memcpy(component, component_start, component_len);
+        component[component_len] = '\0';
+
         fat_dir_entry_t entry;
         int ret = fat_find_in_dir(ctx, cur_dir, component, &entry, NULL, NULL);
         if (ret != FAT_OK) return FAT_ERR_NOT_FOUND;
@@ -609,6 +856,12 @@ static int fat_resolve_path(fat_ctx_t *ctx, const char *path,
 
         cur_dir = ((uint32_t)entry.fst_clus_hi << 16) | entry.fst_clus_lo;
         if (cur_dir == 0) cur_dir = root_cluster(ctx);
+
+        if (*path == '\0') {
+            *parent_cluster = cur_dir;
+            *final_name = NULL;
+            return FAT_OK;
+        }
     }
 
     *parent_cluster = cur_dir;
@@ -639,24 +892,69 @@ static int fat_create_entry(fat_ctx_t *ctx, uint32_t parent_dir,
                             uint32_t start_cluster, uint32_t file_size,
                             uint32_t *out_sector, uint16_t *out_offset)
 {
-    uint32_t sec; uint16_t off;
-    int ret = fat_find_free_entry(ctx, parent_dir, &sec, &off);
+    uint8_t short_name[11];
+    uint32_t needed_entries = 1;
+    uint32_t first_index = 0;
+    int lfn_slots = 0;
+    uint16_t name_u16[SGL_FATFS_MAX_LFN];
+    int name_len = -1;
+
+    name_to_83(name, short_name);
+
+    if (fat_name_needs_lfn(name)) {
+        name_len = fat_utf8_to_ucs2(name, name_u16, SGL_FATFS_MAX_LFN);
+        if (name_len <= 0) return FAT_ERR_INVALID;
+        lfn_slots = (name_len + FAT_LFN_CHARS - 1) / FAT_LFN_CHARS;
+        needed_entries += (uint32_t)lfn_slots;
+    }
+
+    int ret = fat_find_free_entries(ctx, parent_dir, needed_entries, &first_index);
     if (ret != FAT_OK) return ret;
+
+    if (lfn_slots > 0) {
+        uint8_t checksum = fat_lfn_checksum(short_name);
+        for (int slot = 0; slot < lfn_slots; slot++) {
+            fat_dir_entry_t lfn_entry;
+            uint8_t *raw = (uint8_t *)&lfn_entry;
+            uint8_t seq = (uint8_t)(lfn_slots - slot);
+            uint32_t part = (uint32_t)(seq - 1) * FAT_LFN_CHARS;
+
+            memset(raw, 0xFF, FAT_DIR_ENTRY_SIZE);
+            if (slot == 0) seq |= FAT_LFN_LAST;
+            raw[0] = seq;
+            raw[11] = FAT_LFN_ATTR;
+            raw[12] = 0;
+            raw[13] = checksum;
+            raw[26] = 0;
+            raw[27] = 0;
+
+            for (int index = 0; index < FAT_LFN_CHARS; index++) {
+                uint16_t value = 0xFFFF;
+                uint32_t char_index = part + (uint32_t)index;
+                if (char_index < (uint32_t)name_len) {
+                    value = name_u16[char_index];
+                } else if (char_index == (uint32_t)name_len) {
+                    value = 0x0000;
+                }
+                fat_lfn_write_char(raw, index, value);
+            }
+
+            ret = fat_write_dir_entry_by_index(ctx, parent_dir, first_index + (uint32_t)slot,
+                                               &lfn_entry, NULL, NULL);
+            if (ret != FAT_OK) return ret;
+        }
+    }
 
     fat_dir_entry_t entry;
     memset(&entry, 0, sizeof(entry));
-    name_to_83(name, entry.name);
+    memcpy(entry.name, short_name, sizeof(entry.name));
     entry.attr = attr;
     entry.fst_clus_lo = (uint16_t)(start_cluster & 0xFFFF);
     entry.fst_clus_hi = (uint16_t)((start_cluster >> 16) & 0xFFFF);
     entry.file_size = file_size;
 
-    ret = fat_write_dir_entry(ctx, sec, off, &entry);
-    if (ret == FAT_OK) {
-        if (out_sector) *out_sector = sec;
-        if (out_offset) *out_offset = off;
-    }
-    return ret;
+    return fat_write_dir_entry_by_index(ctx, parent_dir, first_index + (uint32_t)lfn_slots,
+                                        &entry, out_sector, out_offset);
 }
 
 static int fatfs_mount(void **fs, sgl_block_dev_t *dev,
@@ -1023,7 +1321,7 @@ static int fatfs_opendir(void *fs, const char *path, int *dd)
     }
     fat_dir_t *d = &ctx->dirs[slot];
     d->used = 1; d->start_cluster = dir_cluster;
-    d->cur_cluster = dir_cluster; d->entry_index = 0; d->finished = 0;
+    d->cur_cluster = dir_cluster; d->entry_index = 0; d->lfn_valid = 0; d->lfn_name[0] = '\0'; d->finished = 0;
     *dd = slot;
     return FAT_OK;
 }
@@ -1041,12 +1339,35 @@ static int fatfs_readdir(void *fs, int dd, char *name, uint32_t name_size, uint3
         fat_dir_entry_t entry;
         int ret = fat_read_dir_entry(ctx, is_root ? 0 : dc, d->entry_index, &entry, NULL, NULL);
         if (ret != FAT_OK) { d->finished = 1; return 0; }
-        d->entry_index++;
         if (entry.name[0] == FAT_ENTRY_END) { d->finished = 1; return 0; }
-        if (entry.name[0] == FAT_ENTRY_FREE) continue;
-        if (entry.attr & FAT_ATTR_LONG_NAME) continue;
+        if (entry.name[0] == FAT_ENTRY_FREE) {
+            d->entry_index++;
+            d->lfn_valid = 0;
+            continue;
+        }
+        if (entry.attr & FAT_ATTR_LONG_NAME) {
+            uint32_t next_index = 0;
+            if (fat_collect_lfn_name(ctx, is_root ? 0 : dc, d->entry_index, d->lfn_name, sizeof(d->lfn_name), &next_index) == FAT_OK) {
+                d->lfn_valid = 1;
+                d->entry_index = next_index;
+                continue;
+            }
+            d->entry_index++;
+            d->lfn_valid = 0;
+            continue;
+        }
+        d->entry_index++;
         if (entry.attr & FAT_ATTR_VOLUME_ID) continue;
-        if (name && name_size > 0) name_from_83(entry.name, name, name_size);
+        if (name && name_size > 0) {
+            if (d->lfn_valid) {
+                strncpy(name, d->lfn_name, name_size - 1);
+                name[name_size - 1] = '\0';
+                d->lfn_valid = 0;
+            } else
+            {
+                name_from_83(entry.name, name, name_size);
+            }
+        }
         if (type) *type = (entry.attr & FAT_ATTR_DIRECTORY) ? SGL_S_IFDIR : SGL_S_IFREG;
         return 1;
     }

@@ -60,7 +60,8 @@ typedef struct {
 
 typedef struct {
     uint8_t used;
-    ramfs_node_t *next;
+    ramfs_node_t *dir;
+    uint32_t index;
 } ramfs_dir_t;
 
 typedef struct {
@@ -178,6 +179,35 @@ static ramfs_node_t *ramfs_create_node(ramfs_node_t *parent, const char *name, u
     return node;
 }
 
+static ramfs_node_t *ramfs_get_child_by_index(ramfs_node_t *dir, uint32_t index)
+{
+    if (!dir || dir->type != SGL_S_IFDIR) return NULL;
+
+    ramfs_node_t *node = dir->child;
+    while (node && index > 0) {
+        node = node->next;
+        index--;
+    }
+    return node;
+}
+
+static int ramfs_is_ancestor(ramfs_node_t *ancestor, ramfs_node_t *node)
+{
+    while (node) {
+        if (node == ancestor) return 1;
+        node = node->parent;
+    }
+    return 0;
+}
+
+static int ramfs_has_open_dir(ramfs_ctx_t *ctx, ramfs_node_t *dir)
+{
+    for (int i = 0; i < RAMFS_MAX_OPEN_DIRS; i++) {
+        if (ctx->dirs[i].used && ctx->dirs[i].dir == dir) return 1;
+    }
+    return 0;
+}
+
 static void ramfs_unlink_node(ramfs_node_t *node)
 {
     ramfs_node_t **link = &node->parent->child;
@@ -210,16 +240,20 @@ static void ramfs_free_node(ramfs_node_t *node)
 static int ramfs_resize_file(ramfs_ctx_t *ctx, ramfs_node_t *node, uint32_t new_size)
 {
     if (!ctx || !node || node->type != SGL_S_IFREG) return RAMFS_ERR_INVALID;
+    if (ctx->used_size < node->size) return RAMFS_ERR_INVALID;
+
+    uint32_t used_without_file = ctx->used_size - node->size;
+    if (new_size > 0xFFFFFFFFUL - used_without_file) return RAMFS_ERR_NO_SPACE;
+
+    uint32_t new_used = used_without_file + new_size;
+    if (ctx->max_size != 0 && new_used > ctx->max_size) return RAMFS_ERR_NO_SPACE;
 
     if (new_size <= node->capacity) {
         if (new_size > node->size) memset(node->data + node->size, 0, new_size - node->size);
-        ctx->used_size = ctx->used_size - node->size + new_size;
         node->size = new_size;
+        ctx->used_size = new_used;
         return RAMFS_OK;
     }
-
-    uint32_t new_used = ctx->used_size - node->size + new_size;
-    if (ctx->max_size != 0 && new_used > ctx->max_size) return RAMFS_ERR_NO_SPACE;
 
     uint32_t new_capacity = node->capacity ? node->capacity : 16;
     while (new_capacity < new_size) {
@@ -282,6 +316,15 @@ static int ramfs_open(void *fs, const char *path, uint32_t flags)
     ramfs_ctx_t *ctx = (ramfs_ctx_t *)fs;
     if (!ctx || !path) return RAMFS_ERR_INVALID;
 
+    int slot = -1;
+    for (int i = 0; i < RAMFS_MAX_OPEN_FILES; i++) {
+        if (!ctx->files[i].used) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot < 0) return RAMFS_ERR_BADF;
+
     ramfs_node_t *node = NULL;
     int ret = ramfs_lookup(ctx, path, &node);
     if (ret == RAMFS_ERR_NOT_FOUND && (flags & SGL_O_CREAT)) {
@@ -298,22 +341,16 @@ static int ramfs_open(void *fs, const char *path, uint32_t flags)
 
     if (ret != RAMFS_OK) return ret;
     if (node->type != SGL_S_IFREG) return RAMFS_ERR_INVALID;
-    if ((flags & SGL_O_TRUNC) && !(flags & SGL_O_RDONLY)) {
+    if ((flags & SGL_O_TRUNC) && ((flags & 0x03) != SGL_O_RDONLY)) {
         ret = ramfs_resize_file(ctx, node, 0);
         if (ret != RAMFS_OK) return ret;
     }
 
-    for (int i = 0; i < RAMFS_MAX_OPEN_FILES; i++) {
-        if (!ctx->files[i].used) {
-            ctx->files[i].used = 1;
-            ctx->files[i].node = node;
-            ctx->files[i].flags = flags;
-            ctx->files[i].pos = (flags & SGL_O_APPEND) ? node->size : 0;
-            return i;
-        }
-    }
-
-    return RAMFS_ERR_BADF;
+    ctx->files[slot].used = 1;
+    ctx->files[slot].node = node;
+    ctx->files[slot].flags = flags;
+    ctx->files[slot].pos = (flags & SGL_O_APPEND) ? node->size : 0;
+    return slot;
 }
 
 static int ramfs_close(void *fs, int fd)
@@ -335,6 +372,8 @@ static int ramfs_read(void *fs, int fd, void *buffer, uint32_t count)
     if (!buffer || count == 0) return 0;
 
     ramfs_file_t *file = &ctx->files[fd];
+    if ((file->flags & 0x03) == SGL_O_WRONLY) return RAMFS_ERR_DENIED;
+
     ramfs_node_t *node = file->node;
     if (file->pos >= node->size) return 0;
 
@@ -380,7 +419,8 @@ static int ramfs_opendir(void *fs, const char *path, int *dd)
     for (int i = 0; i < RAMFS_MAX_OPEN_DIRS; i++) {
         if (!ctx->dirs[i].used) {
             ctx->dirs[i].used = 1;
-            ctx->dirs[i].next = node->child;
+            ctx->dirs[i].dir = node;
+            ctx->dirs[i].index = 0;
             *dd = i;
             return RAMFS_OK;
         }
@@ -394,7 +434,7 @@ static int ramfs_readdir(void *fs, int dd, char *name, uint32_t name_size, uint3
     ramfs_ctx_t *ctx = (ramfs_ctx_t *)fs;
     if (!ctx || dd < 0 || dd >= RAMFS_MAX_OPEN_DIRS || !ctx->dirs[dd].used) return RAMFS_ERR_BADF;
 
-    ramfs_node_t *node = ctx->dirs[dd].next;
+    ramfs_node_t *node = ramfs_get_child_by_index(ctx->dirs[dd].dir, ctx->dirs[dd].index);
     if (!node) return 0;
 
     if (name && name_size > 0) {
@@ -404,7 +444,7 @@ static int ramfs_readdir(void *fs, int dd, char *name, uint32_t name_size, uint3
         name[copy] = '\0';
     }
     if (type) *type = node->type;
-    ctx->dirs[dd].next = node->next;
+    ctx->dirs[dd].index++;
     return 1;
 }
 
@@ -414,7 +454,8 @@ static int ramfs_closedir(void *fs, int dd)
     if (!ctx || dd < 0 || dd >= RAMFS_MAX_OPEN_DIRS || !ctx->dirs[dd].used) return RAMFS_ERR_BADF;
 
     ctx->dirs[dd].used = 0;
-    ctx->dirs[dd].next = NULL;
+    ctx->dirs[dd].dir = NULL;
+    ctx->dirs[dd].index = 0;
     return RAMFS_OK;
 }
 
@@ -452,6 +493,7 @@ static int ramfs_remove(void *fs, const char *path)
     if (ret != RAMFS_OK) return ret;
     if (node == &ctx->root) return RAMFS_ERR_DENIED;
     if (node->type == SGL_S_IFDIR && node->child) return RAMFS_ERR_NOT_EMPTY;
+    if (node->type == SGL_S_IFDIR && ramfs_has_open_dir(ctx, node)) return RAMFS_ERR_DENIED;
 
     for (int i = 0; i < RAMFS_MAX_OPEN_FILES; i++) {
         if (ctx->files[i].used && ctx->files[i].node == node) return RAMFS_ERR_DENIED;
@@ -510,6 +552,7 @@ static int ramfs_rename(void *fs, const char *old_path, const char *new_path)
     ret = ramfs_lookup_parent(ctx, new_path, &new_parent, &new_name, &new_name_len);
     if (ret != RAMFS_OK) return ret;
     if (ramfs_find_child(new_parent, new_name, new_name_len)) return RAMFS_ERR_EXIST;
+    if (node->type == SGL_S_IFDIR && ramfs_is_ancestor(node, new_parent)) return RAMFS_ERR_DENIED;
 
     ramfs_unlink_node(node);
     node->parent = new_parent;
@@ -528,8 +571,13 @@ static int ramfs_statvfs(void *fs, sgl_statvfs_t *info)
     memset(info, 0, sizeof(*info));
     /* RAMFS uses 1-byte blocks for simplicity */
     info->f_bsize = 1;
-    info->f_blocks = ctx->max_size;
-    info->f_bfree = ctx->max_size - ctx->used_size;
+    if (ctx->max_size == 0) {
+        info->f_blocks = 0;
+        info->f_bfree = 0;
+    } else {
+        info->f_blocks = ctx->max_size;
+        info->f_bfree = ctx->max_size > ctx->used_size ? ctx->max_size - ctx->used_size : 0;
+    }
     info->f_bavail = info->f_bfree;
     info->f_files = 0;
     info->f_ffree = 0;

@@ -25,6 +25,7 @@
 #ifndef __SGL_CORE_H__
 #define __SGL_CORE_H__
 
+#include <stdint.h>
 #include <stdarg.h>
 #include <sgl_cfgfix.h>
 #include <sgl_math.h>
