@@ -74,6 +74,10 @@
 #include "widgets/roller/sgl_roller.h"
 #include "widgets/launcher/sgl_launcher.h"
 #include "widgets/filebrowser/sgl_filebrowser.h"
+#include "fs/fatfs/sgl_fatfs.h"
+#include "fs/littlefs/sgl_littlefs.h"
+#include "fs/ramfs/sgl_ramfs.h"
+#include "fs/sgl_blkdev_info.h"
 #include "components/timer/sgl_timer.h"
 #include "components/3dvortex/sgl_3dvortex.h"
 
