@@ -22,8 +22,8 @@
  * SOFTWARE.
  */
 
-#ifndef __SGL_LABEL_H__
-#define __SGL_LABEL_H__
+#ifndef __SGL_LABEL_EXT_H__
+#define __SGL_LABEL_EXT_H__
 
 #include <sgl_core.h>
 #include <sgl_draw.h>
@@ -174,4 +174,4 @@ void sgl_label_ext_set_text_offset(sgl_obj_t *obj, int8_t offset_x, int8_t offse
  */
 void sgl_label_ext_set_text_rotation(sgl_obj_t *obj, int16_t text_rotation);
 
-#endif // !__SGL_LABEL_H__
+#endif // !__SGL_LABEL_EXT_H__
