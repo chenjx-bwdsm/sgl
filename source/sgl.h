@@ -40,6 +40,8 @@
 #include "widgets/slider/sgl_slider.h"
 #include "widgets/progress/sgl_progress.h"
 #include "widgets/label/sgl_label.h"
+#include "widgets/label_ext/sgl_label_ext.h"
+#include "widgets/arc_label/sgl_arc_label.h"
 #include "widgets/switch/sgl_switch.h"
 #include "widgets/msgbox/sgl_msgbox.h"
 #include "widgets/textline/sgl_textline.h"
