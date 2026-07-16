@@ -122,7 +122,6 @@ static void sgl_img_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t *
     uint8_t pix_byte = sgl_pixmal_get_pixel_bytes(pixmap);
     sgl_color_t tmp_color, *buf = NULL, *blend = NULL;
     uint8_t *pixmap_buf = (uint8_t*)pixmap->bitmap.array;
-    size_t pix_value = 0;
     size_t offset = 0;
 
     sgl_area_t area = {
@@ -138,61 +137,135 @@ static void sgl_img_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t *
         }
 
         if (img->read != NULL) {
+            /* Calculate buffer lines: 0 means use full clip height, otherwise use configured value capped at clip height */
+            uint16_t buf_lines = SGL_IMG_BUFFER_SIZE;
+            if (buf_lines == 0) {
+                buf_lines = (uint16_t)(clip.y2 - clip.y1 + 1);
+            }
+            else if (buf_lines > (uint16_t)(clip.y2 - clip.y1 + 1)) {
+                buf_lines = (uint16_t)(clip.y2 - clip.y1 + 1);
+            }
+            img->buffer_lines = buf_lines;
+
             if (img->flash_buffer == NULL) {
-                img->flash_buffer = (uint8_t*)sgl_malloc(pix_byte * (clip.x2 - clip.x1 + 1));
+                img->flash_buffer = (uint8_t*)sgl_malloc(pix_byte * (clip.x2 - clip.x1 + 1) * buf_lines);
             }
             pixmap_buf = img->flash_buffer;
+        }
+        else {
+            /* No external read: use 1-line buffer mode, read directly from memory */
+            img->buffer_lines = 1;
         }
 
         if (pixmap->format < SGL_PIXMAP_FMT_RLE_RGB332) {
             buf = sgl_surf_get_buf(surf, clip.x1 - surf->x1, clip.y1 - surf->y1);
 
-            for (int y = clip.y1; y <= clip.y2; y++) {
-                blend = buf;
-                offset = ((((y - area.y1) * pixmap->width) + (clip.x1 - area.x1)) * pix_byte);
-                if(img->read != NULL) {
-                    img->read(read_addr + offset, pixmap_buf, pix_byte * (clip.x2 - clip.x1 + 1));
-                    offset = 0;
-                }
+            uint16_t row_width_bytes = pix_byte * (uint16_t)(clip.x2 - clip.x1 + 1);
+            uint16_t buf_lines = img->buffer_lines;
+            uint16_t lines_in_buf = 0;
 
-                for (int x = clip.x1; x <= clip.x2; x++) {
-                    switch (pixmap->format) {
-                    case SGL_PIXMAP_FMT_RGB332:
-                        pix_value = pixmap_buf[offset];
-                        tmp_color = sgl_rgb332_to_color(pix_value);
-                        break;
-                    case SGL_PIXMAP_FMT_RGB565:
-                        pix_value = pixmap_buf[offset] | (pixmap_buf[offset + 1] << 8);
-                        tmp_color = sgl_rgb565_to_color(pix_value);
-                        break;
-                    case SGL_PIXMAP_FMT_ARGB2222:
-                        pix_value = pixmap_buf[offset];
-                        tmp_color = sgl_rgb222_to_color(pix_value);
-                        tmp_color = sgl_color_mixer(tmp_color, *blend, sgl_opa2_table[pix_value >> 6]);
-                        break;
-                    case SGL_PIXMAP_FMT_ARGB4444:
-                        pix_value = pixmap_buf[offset] | (pixmap_buf[offset + 1] << 8);
-                        tmp_color = sgl_rgb444_to_color(pix_value);
-                        tmp_color = sgl_color_mixer(tmp_color, *blend, sgl_opa4_table[pix_value >> 12]);
-                        break;
-                    case SGL_PIXMAP_FMT_RGB888:
-                        pix_value = pixmap_buf[offset] | (pixmap_buf[offset + 1] << 8) | (pixmap_buf[offset + 2] << 16);
-                        tmp_color = sgl_rgb888_to_color(pix_value);
-                        break;
-                    case SGL_PIXMAP_FMT_ARGB8888:
-                        pix_value = pixmap_buf[offset] | (pixmap_buf[offset + 1] << 8) | (pixmap_buf[offset + 2] << 16);
-                        tmp_color = sgl_rgb888_to_color(pix_value);
-                        tmp_color = sgl_color_mixer(tmp_color, *blend, pixmap_buf[offset + 3]);
-                        break;
-                    default:
-                        break;
-                    }
-                    *blend = img->alpha == SGL_ALPHA_MAX ? tmp_color : sgl_color_mixer(tmp_color, *blend, img->alpha);
-                    offset += pix_byte;
-                    blend ++;
-                };
-                buf += surf->w;
+/* Y-loop header: refill buffer, compute blend/offset for current row.
+ * Usage: DRAW_Y_HEAD() followed by a for(x...) pixel loop, then DRAW_Y_TAIL() */
+#define DRAW_Y_HEAD()                                                        \
+            for (int y = clip.y1; y <= clip.y2; y++) {                       \
+                if (lines_in_buf == 0) {                                     \
+                    uint16_t _ltr = buf_lines;                               \
+                    if ((uint16_t)(clip.y2 - y + 1) < _ltr)                  \
+                        _ltr = (uint16_t)(clip.y2 - y + 1);                  \
+                    offset = (((y - area.y1) * pixmap->width)                \
+                        + (clip.x1 - area.x1)) * pix_byte;                   \
+                    if (img->read != NULL) {                                 \
+                        img->read(read_addr + offset, pixmap_buf,            \
+                            row_width_bytes * _ltr);                         \
+                        img->buffer_line = (uint16_t)(y - clip.y1);          \
+                    } else {                                                 \
+                        pixmap_buf = (uint8_t*)pixmap->bitmap.array + offset;\
+                    }                                                        \
+                    lines_in_buf = _ltr;                                     \
+                }                                                            \
+                blend = buf;                                                 \
+                offset = (img->read != NULL)                                 \
+                    ? (uint16_t)(y - clip.y1 - img->buffer_line) * row_width_bytes : 0
+
+#define DRAW_Y_TAIL()                                                        \
+                buf += surf->w;                                              \
+                lines_in_buf --;                                             \
             }
+
+            switch (pixmap->format) {
+            case SGL_PIXMAP_FMT_RGB332:
+                DRAW_Y_HEAD();
+                    for (int x = clip.x1; x <= clip.x2; x++) {
+                        tmp_color = sgl_rgb332_to_color(pixmap_buf[offset]);
+                        *blend = (img->alpha == SGL_ALPHA_MAX) ? tmp_color
+                            : sgl_color_mixer(tmp_color, *blend, img->alpha);
+                        offset += 1; blend ++;
+                    }
+                DRAW_Y_TAIL();
+                break;
+            case SGL_PIXMAP_FMT_RGB565:
+                DRAW_Y_HEAD();
+                    for (int x = clip.x1; x <= clip.x2; x++) {
+                        tmp_color = sgl_rgb565_to_color(pixmap_buf[offset] | (pixmap_buf[offset + 1] << 8));
+                        *blend = (img->alpha == SGL_ALPHA_MAX) ? tmp_color
+                            : sgl_color_mixer(tmp_color, *blend, img->alpha);
+                        offset += 2; blend ++;
+                    }
+                DRAW_Y_TAIL();
+                break;
+            case SGL_PIXMAP_FMT_ARGB2222:
+                DRAW_Y_HEAD();
+                    for (int x = clip.x1; x <= clip.x2; x++) {
+                        uint8_t _v = pixmap_buf[offset];
+                        tmp_color = sgl_rgb222_to_color(_v);
+                        tmp_color = sgl_color_mixer(tmp_color, *blend, sgl_opa2_table[_v >> 6]);
+                        *blend = (img->alpha == SGL_ALPHA_MAX) ? tmp_color
+                            : sgl_color_mixer(tmp_color, *blend, img->alpha);
+                        offset += 1; blend ++;
+                    }
+                DRAW_Y_TAIL();
+                break;
+            case SGL_PIXMAP_FMT_ARGB4444:
+                DRAW_Y_HEAD();
+                    for (int x = clip.x1; x <= clip.x2; x++) {
+                        uint16_t _v = pixmap_buf[offset] | (pixmap_buf[offset + 1] << 8);
+                        tmp_color = sgl_rgb444_to_color(_v);
+                        tmp_color = sgl_color_mixer(tmp_color, *blend, sgl_opa4_table[_v >> 12]);
+                        *blend = (img->alpha == SGL_ALPHA_MAX) ? tmp_color
+                            : sgl_color_mixer(tmp_color, *blend, img->alpha);
+                        offset += 2; blend ++;
+                    }
+                DRAW_Y_TAIL();
+                break;
+            case SGL_PIXMAP_FMT_RGB888:
+                DRAW_Y_HEAD();
+                    for (int x = clip.x1; x <= clip.x2; x++) {
+                        tmp_color = sgl_rgb888_to_color(
+                            pixmap_buf[offset] | (pixmap_buf[offset + 1] << 8) | (pixmap_buf[offset + 2] << 16));
+                        *blend = (img->alpha == SGL_ALPHA_MAX) ? tmp_color
+                            : sgl_color_mixer(tmp_color, *blend, img->alpha);
+                        offset += 3; blend ++;
+                    }
+                DRAW_Y_TAIL();
+                break;
+            case SGL_PIXMAP_FMT_ARGB8888:
+                DRAW_Y_HEAD();
+                    for (int x = clip.x1; x <= clip.x2; x++) {
+                        tmp_color = sgl_rgb888_to_color(
+                            pixmap_buf[offset] | (pixmap_buf[offset + 1] << 8) | (pixmap_buf[offset + 2] << 16));
+                        tmp_color = sgl_color_mixer(tmp_color, *blend, pixmap_buf[offset + 3]);
+                        *blend = (img->alpha == SGL_ALPHA_MAX) ? tmp_color
+                            : sgl_color_mixer(tmp_color, *blend, img->alpha);
+                        offset += 4; blend ++;
+                    }
+                DRAW_Y_TAIL();
+                break;
+            default:
+                break;
+            }
+
+#undef DRAW_Y_HEAD
+#undef DRAW_Y_TAIL
         }
         else {
             /* RLE pixmap support */

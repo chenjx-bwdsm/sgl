@@ -116,6 +116,10 @@ extern "C" {
 #define CONFIG_SGL_PIXMAP_BILINEAR_INTERP                          (0)  /* Pixmap bilinear interpolation */
 #endif
 
+#ifndef CONFIG_SGL_IMG_BUFFER_LINES
+#define CONFIG_SGL_IMG_BUFFER_LINES                                (0)  /* External image line buffer size in lines, 0=auto (use full height) */
+#endif
+
 #ifndef CONFIG_SGL_ANIMATION
 #define CONFIG_SGL_ANIMATION                                       (0)  /* Global animation enable */
 #endif

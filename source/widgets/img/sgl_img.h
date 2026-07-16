@@ -108,7 +108,7 @@
  */
 
  /* TODO: add ext img buffer size config */
-#define SGL_IMG_BUFFER_SIZE   (CONFIG_SGL_IMG_BUFFER)
+#define SGL_IMG_BUFFER_SIZE   (CONFIG_SGL_IMG_BUFFER_LINES)
 
 /**
  * @brief sgl img struct
@@ -129,6 +129,8 @@ typedef struct sgl_img {
     uint8_t         remainder;
     uint8_t         pix_alpha;
     uint8_t         *flash_buffer;
+    uint16_t        buffer_lines;   /* Number of lines the flash_buffer can hold */
+    uint16_t        buffer_line;    /* Current starting line in flash_buffer */
 } sgl_img_t;
 
 /**
