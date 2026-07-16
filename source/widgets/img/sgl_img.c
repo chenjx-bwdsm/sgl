@@ -137,8 +137,10 @@ static void sgl_img_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t *
             return;
         }
 
-        if (img->read != NULL && img->flash_buffer != NULL) {
-            img->flash_buffer = (uint8_t*)sgl_malloc(pix_byte * (clip.x2 - clip.x1 + 1));
+        if (img->read != NULL) {
+            if (img->flash_buffer == NULL) {
+                img->flash_buffer = (uint8_t*)sgl_malloc(pix_byte * (clip.x2 - clip.x1 + 1));
+            }
             pixmap_buf = img->flash_buffer;
         }
 
