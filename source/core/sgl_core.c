@@ -1707,10 +1707,12 @@ static inline void draw_obj_slice(sgl_obj_t *obj, sgl_surf_t *surf)
             SGL_ASSERT(obj->construct_fn != NULL);
             obj->construct_fn(surf, obj, &evt);
 
+#if (CONFIG_SGL_FOCUSED_WIDTH)
             /* draw focus border */
             if (unlikely(obj->focus)) {
                 sgl_draw_wireframe(surf, &obj->area, &obj->coords, obj->radius, SGL_FOCUSED_WIDTH, SGL_FOCUSED_COLOR, SGL_ALPHA_MAX);
             }
+#endif
         }
 
         if (obj->child != NULL) {

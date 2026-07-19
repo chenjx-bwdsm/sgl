@@ -202,7 +202,7 @@ void sgl_launcher_add_app(sgl_obj_t *launcher, sgl_launcher_app_t *app)
     sgl_launcher_t *launcher_obj = (sgl_launcher_t *)launcher;
     int16_t width = 0;
 
-    sgl_obj_t *icon = sgl_sprite_create(launcher);
+    sgl_obj_t *icon = sgl_rect_create(launcher);
     if (icon == NULL) {
         SGL_LOG_ERROR("sgl_launcher_add_app: sprite create failed");
         return;
@@ -231,7 +231,8 @@ void sgl_launcher_add_app(sgl_obj_t *launcher, sgl_launcher_app_t *app)
 
     sgl_obj_set_pos(icon, x + x_ofs, y);
     sgl_obj_set_size(icon, launcher_obj->icon_size, launcher_obj->icon_size);
-    sgl_sprite_set_pixmap(icon, app->icon);
+    sgl_rect_set_pixmap(icon, app->icon);
+    sgl_obj_set_clickable(icon);
     sgl_obj_set_event_cb(icon, app->event_cb, app->private_data);
 
     sgl_obj_set_pos(label, x + x_ofs, y + launcher_obj->icon_size + 2);

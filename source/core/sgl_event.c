@@ -396,6 +396,12 @@ void sgl_event_task(void)
                 evt.obj = evt_ctx.last_click;
                 sgl_event_queue_push(evt);
             }
+            else {
+                obj = sgl_screen_act();
+                if(obj->event_fn) {
+                    obj->event_fn(&evt);
+                }
+            }
         }
     }
 }
