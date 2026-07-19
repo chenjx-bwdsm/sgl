@@ -68,6 +68,7 @@ static void sgl_slider_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_
     int16_t h = obj->coords.y2 - obj->coords.y1 + 1;
     int16_t knob_r, fill_pos, thickness, radius;
     sgl_rect_t bar;
+    int value;
     sgl_area_t old_dirty, dirty;
     sgl_area_t desc_area = obj->area;
 
@@ -146,7 +147,7 @@ static void sgl_slider_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_
 
     case SGL_EVENT_KEY_LEFT:
     case SGL_EVENT_KEY_RIGHT:
-        int value = evt->type == SGL_EVENT_KEY_LEFT ? slider->value - 1 : slider->value + 1;
+        value = evt->type == SGL_EVENT_KEY_LEFT ? slider->value - 1 : slider->value + 1;
         slider->value = sgl_clamp(value, 0, 100);
         sgl_slider_get_knob_dirty_area(obj, slider, &dirty);
         dirty.y1 = obj->coords.y1 - 2;
