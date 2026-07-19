@@ -32,6 +32,34 @@
 #include <string.h>
 #include "sgl_slider.h"
 
+static void sgl_slider_get_knob_dirty_area(sgl_obj_t *obj, sgl_slider_t *slider, sgl_area_t *dirty)
+{
+    int16_t w = obj->coords.x2 - obj->coords.x1 + 1;
+    int16_t h = obj->coords.y2 - obj->coords.y1 + 1;
+    int16_t knob_r, fill_pos;
+
+    if (slider->direct == SGL_DIRECT_HORIZONTAL) {
+        knob_r   = h / 2 - 1;
+        int16_t bar_x1 = obj->coords.x1 + knob_r;
+        int16_t bar_x2 = obj->coords.x2 - knob_r;
+        fill_pos = obj->coords.x1 + w * slider->value / 100 - obj->border;
+        fill_pos = sgl_clamp(fill_pos, bar_x1, bar_x2);
+
+        dirty->x1 = fill_pos - knob_r;
+        dirty->x2 = fill_pos + knob_r;
+    }
+    else {
+        knob_r   = w / 2 - 1;
+        int16_t bar_y1 = obj->coords.y1 + knob_r;
+        int16_t bar_y2 = obj->coords.y2 - knob_r;
+        fill_pos = obj->coords.y2 - h * slider->value / 100 + obj->border;
+        fill_pos = sgl_clamp(fill_pos, bar_y1, bar_y2);
+
+        int16_t cx = sgl_mid(obj->coords.x1, obj->coords.x2);
+        dirty->x1 = cx - knob_r;
+        dirty->x2 = cx + knob_r;
+    }
+}
 
 static void sgl_slider_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t *evt)
 {
@@ -40,6 +68,7 @@ static void sgl_slider_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_
     int16_t h = obj->coords.y2 - obj->coords.y1 + 1;
     int16_t knob_r, fill_pos, thickness, radius;
     sgl_rect_t bar;
+    sgl_area_t old_dirty, dirty;
     sgl_area_t desc_area = obj->area;
 
     switch (evt->type) {
@@ -89,6 +118,7 @@ static void sgl_slider_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_
     case SGL_EVENT_MOVE_UP:
     case SGL_EVENT_MOVE_LEFT:
     case SGL_EVENT_MOVE_RIGHT:
+        sgl_slider_get_knob_dirty_area(obj, slider, &old_dirty);
         if(slider->direct == SGL_DIRECT_HORIZONTAL) {
             slider->value = sgl_clamp((evt->pos.x - obj->coords.x1) * 100 / (obj->coords.x2 - obj->coords.x1), 0, 100);
         }
@@ -99,26 +129,32 @@ static void sgl_slider_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_
         if(evt->type == SGL_EVENT_PRESSED) {
             sgl_obj_size_zoom(obj, 2);
         }
-        sgl_obj_set_dirty(obj);
+        sgl_slider_get_knob_dirty_area(obj, slider, &dirty);
+        sgl_area_selfmerge(&dirty, &old_dirty);
+        dirty.y1 = obj->coords.y1;
+        dirty.y2 = obj->coords.y2;
+        sgl_obj_update_area(&dirty);
         break;
-    
+
     case SGL_EVENT_RELEASED:
+        dirty.y1 = obj->coords.y1;
+        dirty.y2 = obj->coords.y2;
         sgl_obj_size_zoom(obj, -2);
-        sgl_obj_set_dirty(obj);
+        sgl_slider_get_knob_dirty_area(obj, slider, &dirty);
+        sgl_obj_update_area(&dirty);
         break;
 
     case SGL_EVENT_KEY_LEFT:
-        slider->value = sgl_clamp(slider->value - 1, 0, 100);
-        sgl_obj_set_dirty(obj);
-        break;
-
     case SGL_EVENT_KEY_RIGHT:
-        slider->value = sgl_clamp(slider->value + 1, 0, 100);
-        sgl_obj_set_dirty(obj);
+        int value = evt->type == SGL_EVENT_KEY_LEFT ? slider->value - 1 : slider->value + 1;
+        slider->value = sgl_clamp(value, 0, 100);
+        sgl_slider_get_knob_dirty_area(obj, slider, &dirty);
+        dirty.y1 = obj->coords.y1 - 2;
+        dirty.y2 = obj->coords.y2 + 2;
+        sgl_obj_update_area(&dirty);
         break;
     }
 }
-
 
 /**
  * @brief create a slider object
