@@ -39,7 +39,7 @@ static void sgl_slider_get_knob_dirty_area(sgl_obj_t *obj, sgl_slider_t *slider,
     int16_t knob_r, fill_pos;
 
     if (slider->direct == SGL_DIRECT_HORIZONTAL) {
-        knob_r   = h / 2 - 1;
+        knob_r   = h / 2 + 1;
         int16_t bar_x1 = obj->coords.x1 + knob_r;
         int16_t bar_x2 = obj->coords.x2 - knob_r;
         fill_pos = obj->coords.x1 + w * slider->value / 100 - obj->border;
@@ -49,7 +49,7 @@ static void sgl_slider_get_knob_dirty_area(sgl_obj_t *obj, sgl_slider_t *slider,
         dirty->x2 = fill_pos + knob_r;
     }
     else {
-        knob_r   = w / 2 - 1;
+        knob_r   = w / 2 + 1;
         int16_t bar_y1 = obj->coords.y1 + knob_r;
         int16_t bar_y2 = obj->coords.y2 - knob_r;
         fill_pos = obj->coords.y2 - h * slider->value / 100 + obj->border;
@@ -75,10 +75,10 @@ static void sgl_slider_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_
     switch (evt->type) {
     case SGL_EVENT_DRAW_MAIN:
         if(slider->direct == SGL_DIRECT_HORIZONTAL) {
-            knob_r = h / 2 - 1;
+            knob_r = h / 2 - 2;
             thickness = sgl_min(slider->thickness, knob_r);
-            bar.x1 = obj->coords.x1 + knob_r;
-            bar.x2 = obj->coords.x2 - knob_r;
+            bar.x1 = obj->coords.x1 + knob_r + 1;
+            bar.x2 = obj->coords.x2 - knob_r - 1;
             bar.y1 = obj->coords.y1 + (h - thickness) / 2;
             bar.y2 = bar.y1 + thickness - 1;
             fill_pos = obj->coords.x1 + (w) * slider->value / 100 - obj->border;
@@ -94,10 +94,10 @@ static void sgl_slider_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_
             sgl_draw_fill_circle(surf, &obj->area, fill_pos, sgl_mid(bar.y1, bar.y2), knob_r, slider->knob_color, SGL_ALPHA_MAX);
         }
         else {
-            knob_r = w / 2 - 1;
+            knob_r = w / 2 - 2;
             thickness = sgl_min(slider->thickness, knob_r);
-            bar.y1 = obj->coords.y1 + knob_r;
-            bar.y2 = obj->coords.y2 - knob_r;
+            bar.y1 = obj->coords.y1 + knob_r + 1;
+            bar.y2 = obj->coords.y2 - knob_r - 1;
             bar.x1 = obj->coords.x1 + (w - thickness) / 2;
             bar.x2 = bar.x1 + thickness - 1;
             fill_pos = obj->coords.y2 - (h) * slider->value / 100 + obj->border;
