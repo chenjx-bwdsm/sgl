@@ -45,7 +45,7 @@ static void sgl_checkbox_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
     const int16_t font_h = sgl_font_get_height(checkbox->font);
     const int16_t box_w = font_h - 2;
     sgl_pos_t align_pos = sgl_get_text_pos(&obj->coords, checkbox->font, checkbox->text, 0, SGL_ALIGN_LEFT_MID);
-    sgl_rect_t icon = {
+    sgl_area_t icon = {
         .x1 = obj->coords.x1 + 1,
         .y1 = align_pos.y + 1,
         .x2 = obj->coords.x1 + box_w - 2,

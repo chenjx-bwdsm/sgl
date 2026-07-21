@@ -136,7 +136,7 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_even
         .pixmap = NULL,
     };
 
-    sgl_rect_t bg_coords = obj->coords;
+    sgl_area_t bg_coords = obj->coords;
     const int item_height = sgl_font_get_height(dropdown->font) + 2 * SGL_DROPDOWN_OPTION_SPACE;
     const int item_pad = sgl_max(obj->radius, obj->border + SGL_DROPDOWN_OPTION_PAD);
 
@@ -193,7 +193,7 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_even
                                 text_pos_x1, text_pos_x2, 1, dropdown->text_color, dropdown->alpha);
 
             /* Iterate through all items from the beginning */
-            sgl_rect_t select = {
+            sgl_area_t select = {
                 .x1 = obj->coords.x1 + obj->border,
                 .x2 = obj->coords.x2 - obj->border,
             };

@@ -32,7 +32,8 @@
 #include <sgl_types.h>
 #include <sgl_font.h>
 #include "widgets/line/sgl_line.h"
-#include "widgets/rectangle/sgl_rectangle.h"
+#include "widgets/rect/sgl_rect.h"
+#include "widgets/rect_ext/sgl_rect_ext.h"
 #include "widgets/circle/sgl_circle.h"
 #include "widgets/ring/sgl_ring.h"
 #include "widgets/arc/sgl_arc.h"

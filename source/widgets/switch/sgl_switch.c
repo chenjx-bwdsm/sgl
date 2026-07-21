@@ -52,7 +52,7 @@ static void sgl_switch_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_event_
 
     if (knob_size < 0) knob_size = 0;
 
-    sgl_rect_t bg_rect = obj->coords;
+    sgl_area_t bg_rect = obj->coords;
     if (bg_inset > 0) {
         bg_rect.x1 += bg_inset;
         bg_rect.x2 -= bg_inset;
@@ -72,7 +72,7 @@ static void sgl_switch_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_event_
 
     if (knob_r < 0) knob_r = 0;
 
-    sgl_rect_t knob_rect = {0};
+    sgl_area_t knob_rect = {0};
     knob_rect.y1 = obj->coords.y1 + knob_offset;
     knob_rect.y2 = knob_rect.y1 + knob_size;
 

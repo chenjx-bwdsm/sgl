@@ -168,7 +168,7 @@ static void sgl_draw_unzip_img_with_alpha(sgl_surf_t *surf, int16_t xs, int16_t 
  * @param coords Object coordinates
  * @param desc Drawing description
  */
-void sgl_draw_unzip_img(sgl_surf_t *surf, sgl_rect_t *area, sgl_rect_t *coords, sgl_draw_unzip_img_t *desc)
+void sgl_draw_unzip_img(sgl_surf_t *surf, sgl_area_t *area, sgl_area_t *coords, sgl_draw_unzip_img_t *desc)
 {
     SGL_ASSERT(surf != NULL);
     SGL_ASSERT(desc != NULL);

@@ -39,14 +39,14 @@
  * @obj: sgl general object
  * @desc: rectangle draw description
  */
-typedef struct sgl_rectangle {  
+typedef struct sgl_rect {  
     sgl_obj_t       obj;
     const sgl_pixmap_t *pixmap;
     sgl_color_t     color;
     sgl_color_t     border_color;
     uint8_t         alpha;
     uint8_t         border_alpha;
-} sgl_rectangle_t;
+} sgl_rect_t;
 
 
 /**
@@ -86,7 +86,7 @@ void sgl_rect_set_main_alpha(sgl_obj_t *obj, uint8_t alpha);
  * @param  radius: rectangle radius
  * @retval none
  */
-void sgl_rect_set_radius(sgl_obj_t *obj, uint8_t radius);
+void sgl_rect_set_radius(sgl_obj_t *obj, uint16_t radius);
 
 /**
  * @brief  set rectangle border width

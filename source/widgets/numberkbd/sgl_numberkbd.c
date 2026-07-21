@@ -123,7 +123,7 @@ static void sgl_numberkbd_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_eve
     int16_t box_h = (body_h - (NUMBERKBD_BTN_ROW + 1) * numberkbd->margin) / NUMBERKBD_BTN_ROW;
     int16_t text_x = 0, text_y = 0, btn_row = 0, btn_col = 0;
 
-    sgl_rect_t btn = {
+    sgl_area_t btn = {
         .y1 = obj->coords.y1 + numberkbd->margin,
         .x2 = obj->coords.x1 + numberkbd->margin + box_w,
         .y2 = obj->coords.y1 + numberkbd->margin + box_h,

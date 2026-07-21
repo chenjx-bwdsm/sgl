@@ -30,7 +30,7 @@
 #include <sgl_theme.h>
 #include <sgl_cfgfix.h>
 #include <string.h>
-#include "sgl_rectangle.h"
+#include "sgl_rect.h"
 
 
 /**
@@ -42,7 +42,7 @@
  */
 static void sgl_rectangle_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t *evt)
 {
-    sgl_rectangle_t *rect = sgl_container_of(obj, sgl_rectangle_t, obj);
+    sgl_rect_t *rect = sgl_container_of(obj, sgl_rect_t, obj);
     sgl_draw_rect_t desc = {
         .color = rect->color,
         .alpha = rect->alpha,
@@ -84,14 +84,14 @@ static void sgl_rectangle_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_eve
  */
 sgl_obj_t* sgl_rect_create(sgl_obj_t* parent)
 {
-    sgl_rectangle_t *rect = sgl_malloc(sizeof(sgl_rectangle_t));
+    sgl_rect_t *rect = sgl_malloc(sizeof(sgl_rect_t));
     if(rect == NULL) {
         SGL_LOG_ERROR("sgl_rect_create: malloc failed");
         return NULL;
     }
 
     /* set object all member to zero */
-    memset(rect, 0, sizeof(sgl_rectangle_t));
+    memset(rect, 0, sizeof(sgl_rect_t));
 
     sgl_obj_t *obj = &rect->obj;
     sgl_obj_init(&rect->obj, parent);
@@ -117,7 +117,7 @@ sgl_obj_t* sgl_rect_create(sgl_obj_t* parent)
  */
 void sgl_rect_set_color(sgl_obj_t *obj, sgl_color_t color)
 {
-    sgl_rectangle_t *rect = sgl_container_of(obj, sgl_rectangle_t, obj);
+    sgl_rect_t *rect = sgl_container_of(obj, sgl_rect_t, obj);
     rect->color = color;
     sgl_obj_set_dirty(obj);
 }
@@ -130,7 +130,7 @@ void sgl_rect_set_color(sgl_obj_t *obj, sgl_color_t color)
  */
 void sgl_rect_set_alpha(sgl_obj_t *obj, uint8_t alpha)
 {
-    sgl_rectangle_t *rect = sgl_container_of(obj, sgl_rectangle_t, obj);
+    sgl_rect_t *rect = sgl_container_of(obj, sgl_rect_t, obj);
     rect->alpha = alpha;
     rect->border_alpha = alpha;
     sgl_obj_set_dirty(obj);
@@ -144,7 +144,7 @@ void sgl_rect_set_alpha(sgl_obj_t *obj, uint8_t alpha)
  */
 void sgl_rect_set_main_alpha(sgl_obj_t *obj, uint8_t alpha)
 {
-    sgl_rectangle_t *rect = sgl_container_of(obj, sgl_rectangle_t, obj);
+    sgl_rect_t *rect = sgl_container_of(obj, sgl_rect_t, obj);
     rect->alpha = alpha;
     sgl_obj_set_dirty(obj);
 }
@@ -155,7 +155,7 @@ void sgl_rect_set_main_alpha(sgl_obj_t *obj, uint8_t alpha)
  * @param  radius: rectangle radius
  * @retval none
  */
-void sgl_rect_set_radius(sgl_obj_t *obj, uint8_t radius)
+void sgl_rect_set_radius(sgl_obj_t *obj, uint16_t radius)
 {
     sgl_obj_set_radius(obj, radius);
     sgl_obj_set_dirty(obj);
@@ -180,7 +180,7 @@ void sgl_rect_set_border_width(sgl_obj_t *obj, uint8_t width)
  */
 void sgl_rect_set_border_color(sgl_obj_t *obj, sgl_color_t color)
 {
-    sgl_rectangle_t *rect = sgl_container_of(obj, sgl_rectangle_t, obj);
+    sgl_rect_t *rect = sgl_container_of(obj, sgl_rect_t, obj);
     rect->border_color = color;
     sgl_obj_set_dirty(obj);
 }
@@ -193,7 +193,7 @@ void sgl_rect_set_border_color(sgl_obj_t *obj, sgl_color_t color)
  */
 void sgl_rect_set_border_alpha(sgl_obj_t *obj, uint8_t alpha)
 {
-    sgl_rectangle_t *rect = sgl_container_of(obj, sgl_rectangle_t, obj);
+    sgl_rect_t *rect = sgl_container_of(obj, sgl_rect_t, obj);
     rect->border_alpha = alpha;
     sgl_obj_set_dirty(obj);
 }
@@ -206,7 +206,7 @@ void sgl_rect_set_border_alpha(sgl_obj_t *obj, uint8_t alpha)
  */
 void sgl_rect_set_pixmap(sgl_obj_t *obj, const sgl_pixmap_t *pixmap)
 {
-    sgl_rectangle_t *rect = sgl_container_of(obj, sgl_rectangle_t, obj);
+    sgl_rect_t *rect = sgl_container_of(obj, sgl_rect_t, obj);
     rect->pixmap = pixmap;
     sgl_obj_set_dirty(obj);
 }

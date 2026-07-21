@@ -160,8 +160,6 @@ typedef struct sgl_area {
     int16_t y2;
 } sgl_area_t;
 
-#define sgl_rect_t sgl_area_t
-
 /**
 * @brief This structure defines a 32 bit color bit field
 *

@@ -44,7 +44,7 @@
 static void sgl_scroll_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t *evt)
 {
     sgl_scroll_t *scroll = sgl_container_of(obj, sgl_scroll_t, obj);
-    sgl_rect_t fill = {0};
+    sgl_area_t fill = {0};
     sgl_color_t tmp = scroll->desc.color;
     uint16_t len = 0, pos = 0;
     scroll->desc.radius = sgl_min(scroll->desc.radius, scroll->width / 2);

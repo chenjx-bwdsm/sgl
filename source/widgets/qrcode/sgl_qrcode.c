@@ -31,7 +31,7 @@
 #include <string.h>
 #include "sgl_qrcode.h"
 
-static void qrcode_get_pixmap_size(sgl_qrcode_t *qrcode, sgl_rect_t *mod)
+static void qrcode_get_pixmap_size(sgl_qrcode_t *qrcode, sgl_area_t *mod)
 {
     uint32_t allow, mod_size;
     uint32_t total = sgl_pow2(qrcode->qrcode.size);
@@ -66,7 +66,7 @@ static void sgl_qrcode_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_
         .radius = radius,
     };
 
-    sgl_rect_t coords = {
+    sgl_area_t coords = {
         .x1 = obj->coords.x1,
         .y1 = obj->coords.y1,
     };

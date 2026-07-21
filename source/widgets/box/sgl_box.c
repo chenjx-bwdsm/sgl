@@ -41,7 +41,7 @@ static void sgl_box_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t *
     int16_t width = obj->coords.x2 - obj->coords.x1 - 2 * box->bg.radius;
     int16_t scroll_height = sgl_max(height / 8, SGL_BOX_SCROLL_WIDTH);
     int16_t scroll_width = sgl_max(width / 8, SGL_BOX_SCROLL_WIDTH);
-    sgl_rect_t area;
+    sgl_area_t area;
 
     if(evt->type == SGL_EVENT_DRAW_MAIN) {
         area.x1 = obj->coords.x1 + box->bg.radius;

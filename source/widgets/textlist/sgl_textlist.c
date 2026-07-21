@@ -38,7 +38,7 @@
 static void sgl_textlist_change_item(sgl_textlist_t *textlist, int16_t item_height, int16_t index)
 {
     sgl_obj_t *obj = &textlist->obj;
-    sgl_rect_t select = textlist->obj.coords;
+    sgl_area_t select = textlist->obj.coords;
     select.y1 = obj->coords.y1 + textlist->item_selected * item_height + textlist->pos_y;
     select.y2 = select.y1 + item_height;
     sgl_obj_update_area(&select);
@@ -75,7 +75,7 @@ static void sgl_textlist_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
         const int16_t hline_h = item_height - SGL_TEXTLIST_ITEM_SPACE;
 
         int item_idx = 0;
-        sgl_rect_t select = {
+        sgl_area_t select = {
             .x1 = obj->coords.x1 + obj->border,
             .y1 = obj->coords.y1,
             .x2 = obj->coords.x2 - obj->border,

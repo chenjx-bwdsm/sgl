@@ -474,7 +474,7 @@ static void sgl_filebrowser_draw_scrollbar(sgl_surf_t *surf, sgl_filebrowser_t *
     }
 
     sgl_color_t color = sgl_color_mixer(fb->item_text_color, fb->bg_color, 128);
-    sgl_rect_t thumb = {
+    sgl_area_t thumb = {
         .x1 = scrollbar_x1, .y1 = thumb_y1,
         .x2 = scrollbar_x2, .y2 = thumb_y1 + thumb_h,
     };
@@ -486,11 +486,11 @@ static void sgl_filebrowser_draw_path_bar(sgl_surf_t *surf, sgl_filebrowser_t *f
     const int16_t path_y1 = obj->coords.y1 + obj->border;
     const int16_t path_y2 = path_y1 + item_height - 1;
 
-    sgl_rect_t path_area = {
+    sgl_area_t path_area = {
         .x1 = obj->area.x1 + obj->border,   .y1 = path_y1,
         .x2 = obj->area.x2 - obj->border,   .y2 = path_y2,
     };
-    sgl_rect_t path_rect = {
+    sgl_area_t path_rect = {
         .x1 = obj->coords.x1 + obj->border, .y1 = path_y1,
         .x2 = obj->coords.x2 - obj->border, .y2 = path_y2 + obj->radius + obj->border,
     };
@@ -501,7 +501,7 @@ static void sgl_filebrowser_draw_path_bar(sgl_surf_t *surf, sgl_filebrowser_t *f
 
 static void sgl_filebrowser_update_selection_area(sgl_obj_t *obj, int16_t item_y, int16_t item_height)
 {
-    sgl_rect_t select = {
+    sgl_area_t select = {
         .x1 = obj->coords.x1 + obj->border,
         .y1 = item_y - SGL_FILEBROWSER_ITEM_SPACE,
         .x2 = obj->coords.x2 - obj->border,
@@ -610,7 +610,7 @@ static void sgl_filebrowser_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_e
             sgl_filebrowser_item_t *item = &fb->cache_items[idx - fb->cache_start_index];
 
             if (idx == fb->item_selected) {
-                sgl_rect_t select = {
+                sgl_area_t select = {
                     .x1 = obj->coords.x1 + obj->border,
                     .y1 = text_y - SGL_FILEBROWSER_ITEM_SPACE,
                     .x2 = obj->coords.x2 - obj->border,

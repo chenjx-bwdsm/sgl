@@ -319,7 +319,7 @@ static int8_t keyboard_pos_to_index(int16_t x, int16_t y, sgl_keyboard_t *keyboa
     int16_t index = 0, x_index = -1, y_index = -1, key_mode = KEYBOARD_KEY_MODE(keyboard->key_mode);
     int16_t btn_width[KEYBOARD_BTN_COLUMNS] = {0};
     int16_t btn_height[KEYBOARD_BTN_LINES] = {0};
-    sgl_rect_t btn = {0};
+    sgl_area_t btn = {0};
 
     /* calculate button height */
     sgl_split_len(keybd_btn_height, KEYBOARD_BTN_LINES, height, keyboard->key_margin, btn_height);
@@ -386,7 +386,7 @@ static void sgl_keyboard_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
     const sgl_font_t *font = keyboard->font;
     int16_t btn_width[KEYBOARD_BTN_COLUMNS] = {0};
     int16_t btn_height[KEYBOARD_BTN_LINES] = {0};
-    sgl_rect_t btn_coords = {0}, btn_area;
+    sgl_area_t btn_coords = {0}, btn_area;
 
     /* calculate button height */
     sgl_split_len(keybd_btn_height, KEYBOARD_BTN_LINES, body_h, keyboard->key_margin, btn_height);

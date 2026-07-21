@@ -36,12 +36,12 @@
 static void sgl_spectrum_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t *evt)
 {
     sgl_spectrum_t *spectrum = sgl_container_of(obj, sgl_spectrum_t, obj);
-    sgl_rect_t rect = {
+    sgl_area_t rect = {
         .x1 = obj->coords.x1,
         .y2 = obj->coords.y2,
     };
 
-    sgl_rect_t rect_hat = {
+    sgl_area_t rect_hat = {
         .x1 = obj->coords.x1,
         .y2 = obj->coords.y2,
     };

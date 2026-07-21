@@ -48,7 +48,7 @@ static void sgl_textbox_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event
     int16_t height = obj->coords.y2 - obj->coords.y1 - 2 * textbox->bg.radius;
     int16_t width = obj->coords.x2 - obj->coords.x1 - 2 * textbox->bg.radius;
     int16_t scroll_height = sgl_max(height / 8, SGL_TEXTBOX_SCROLL_WIDTH);
-    sgl_rect_t area;
+    sgl_area_t area;
 
     SGL_ASSERT(textbox->font != NULL);
 

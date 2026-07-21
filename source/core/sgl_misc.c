@@ -43,21 +43,21 @@ static void sgl_logo_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t 
     #define pos_x_val(x)            ((x) * w / NORMALIZATION_FACTOR + obj->coords.x1)
     #define pos_y_val(y)            ((y) * h / NORMALIZATION_FACTOR + obj->coords.y1)
 
-    sgl_rect_t rect = {
+    sgl_area_t rect = {
         .x1 = pos_x_val(176),
         .y1 = pos_y_val(176),
         .x2 = pos_x_val(848),
         .y2 = pos_y_val(848),
     };
 
-    sgl_rect_t sw_rect = {
+    sgl_area_t sw_rect = {
         .x1 = pos_x_val(369),
         .y1 = pos_y_val(340),
         .x2 = pos_x_val(655),
         .y2 = pos_y_val(490),
     };
 
-    sgl_rect_t sw_rect2 = {
+    sgl_area_t sw_rect2 = {
         .x1 = pos_x_val(369),
         .y1 = pos_y_val(539),
         .x2 = pos_x_val(655),
@@ -77,7 +77,7 @@ static void sgl_logo_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t 
                                   rel_value(75), SGL_COLOR_BLUE, logo->alpha);
 
         sgl_draw_fill_circle(surf, &obj->area, pos_x_val(446), pos_y_val(410), rel_value(60), SGL_COLOR_BLUE, logo->alpha);
-        sgl_rect_t pin_rect;
+        sgl_area_t pin_rect;
 
         for (int i = 0, x = 230; i < 5; i++) {
             pin_rect.x1 = pos_x_val(x);

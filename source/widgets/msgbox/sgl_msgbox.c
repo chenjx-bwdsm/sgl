@@ -26,7 +26,7 @@
 #include <sgl_theme.h>
 
 
-static void msgbox_draw_text(sgl_surf_t *surf, sgl_area_t *area, sgl_rect_t *coords, const char *text, const sgl_font_t *font, sgl_color_t color, uint8_t alpha, uint8_t y_offset)
+static void msgbox_draw_text(sgl_surf_t *surf, sgl_area_t *area, sgl_area_t *coords, const char *text, const sgl_font_t *font, sgl_color_t color, uint8_t alpha, uint8_t y_offset)
 {
     sgl_pos_t align_pos;
     align_pos = sgl_get_text_pos(coords, font, text, 0, SGL_ALIGN_CENTER);

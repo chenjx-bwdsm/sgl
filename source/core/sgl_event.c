@@ -161,7 +161,7 @@ static inline int sgl_event_queue_pop(sgl_event_t* out_event)
  * @param radius The radius of the object
  * @return true if the position is focus on the object, false otherwise
  */
-static bool pos_is_focus_on_obj(sgl_event_pos_t *pos, sgl_rect_t *rect, int16_t radius)
+static bool pos_is_focus_on_obj(sgl_event_pos_t *pos, sgl_area_t *rect, int16_t radius)
 {
     if (pos->x < rect->x1 || pos->x > rect->x2 || pos->y < rect->y1 || pos->y > rect->y2) {
         return false;

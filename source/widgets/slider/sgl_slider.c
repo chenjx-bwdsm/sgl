@@ -67,7 +67,7 @@ static void sgl_slider_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_
     int16_t w = obj->coords.x2 - obj->coords.x1 + 1;
     int16_t h = obj->coords.y2 - obj->coords.y1 + 1;
     int16_t knob_r, fill_pos, thickness, radius;
-    sgl_rect_t bar;
+    sgl_area_t bar;
     int value;
     sgl_area_t old_dirty, dirty;
     sgl_area_t desc_area = obj->area;

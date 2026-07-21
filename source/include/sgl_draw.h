@@ -263,6 +263,24 @@ void sgl_draw_fill_rect(sgl_surf_t *surf, sgl_area_t *area, sgl_area_t *rect, in
 
 
 /**
+ * @brief fill a round rectangle with rich independent corner radiuses with alpha
+ * @param surf point to surface
+ * @param area area of rectangle that you want to draw
+ * @param rect point to rectangle that you want to draw
+ * @param tl_radius  Top-Left corner radius
+ * @param tr_radius Top-Right corner radius
+ * @param bl_radius Bottom-Left corner radius
+ * @param br_radius   Bottom-Right corner radius
+ * @param color color of rectangle
+ * @param alpha alpha of rectangle
+ * @return none
+ */
+void sgl_draw_fill_rich_rect(sgl_surf_t *surf, sgl_area_t *area, sgl_area_t *rect, 
+                             int16_t tl_radius, int16_t tr_radius, int16_t bl_radius, int16_t br_radius, 
+                             sgl_color_t color, uint8_t alpha);
+
+
+/**
  * @brief draw only the border ring of a round rectangle, the interior is left untouched
  * @param surf point to surface
  * @param area area of rectangle that you want to draw
@@ -275,6 +293,23 @@ void sgl_draw_fill_rect(sgl_surf_t *surf, sgl_area_t *area, sgl_area_t *rect, in
  */
 void sgl_draw_fill_rect_border(sgl_surf_t *surf, sgl_area_t *area, sgl_area_t *rect, int16_t radius, sgl_color_t border_color, uint8_t border_width, uint8_t border_alpha);
 
+/**
+ * @brief draw only the border ring of a round rectangle with independent corner radii, the interior is left untouched
+ * @param surf point to surface
+ * @param area area of rectangle that you want to draw
+ * @param rect point to rectangle that you want to draw
+ * @param tl_radius radius of top-left corner
+ * @param tr_radius radius of top-right corner
+ * @param bl_radius radius of bottom-left corner
+ * @param br_radius radius of bottom-right corner
+ * @param border_color color of border
+ * @param border_width width of border
+ * @param border_alpha alpha of border
+ * @return none
+ */
+void sgl_draw_fill_rect_border_rich(sgl_surf_t *surf, sgl_area_t *area, sgl_area_t *rect, 
+                                    int16_t tl_radius, int16_t tr_radius, int16_t bl_radius, int16_t br_radius, 
+                                    sgl_color_t border_color, uint8_t border_width, uint8_t border_alpha);
 
 /**
  * @brief fill a round rectangle pixmap with alpha
@@ -290,6 +325,23 @@ void sgl_draw_fill_rect_pixmap(sgl_surf_t *surf, sgl_area_t *area, sgl_area_t *r
 
 
 /**
+ * @brief fill a round rectangle pixmap with individual corner radii and alpha
+ * @param surf point to surface
+ * @param area area of rectangle that you want to draw
+ * @param rect point to rectangle that you want to draw
+ * @param tl_radius radius of top-left corner
+ * @param tr_radius radius of top-right corner
+ * @param bl_radius radius of bottom-left corner
+ * @param br_radius radius of bottom-right corner
+ * @param pixmap pixmap of rectangle
+ * @param alpha alpha of rectangle
+ * @return none
+ */
+void sgl_draw_fill_rect_pixmap_rich(sgl_surf_t *surf, sgl_area_t *area, sgl_area_t *rect, 
+                                    int16_t tl_radius, int16_t tr_radius, int16_t bl_radius, int16_t br_radius,
+                                    const sgl_pixmap_t *pixmap, uint8_t alpha);
+
+/**
  * @brief fill a round rectangle with alpha
  * @param surf point to surface
  * @param area area of rectangle that you want to draw
@@ -297,7 +349,7 @@ void sgl_draw_fill_rect_pixmap(sgl_surf_t *surf, sgl_area_t *area, sgl_area_t *r
  * @param desc rectangle description
  * @return none
  */
-void sgl_draw_rect(sgl_surf_t *surf, sgl_area_t *area, sgl_rect_t *rect, sgl_draw_rect_t *desc);
+void sgl_draw_rect(sgl_surf_t *surf, sgl_area_t *area, sgl_area_t *rect, sgl_draw_rect_t *desc);
 
 
 /**

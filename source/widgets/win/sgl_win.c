@@ -29,8 +29,8 @@
 static void sgl_win_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t *evt)
 {
     sgl_win_t *win = sgl_container_of(obj, sgl_win_t, obj);
-    sgl_rect_t title_area = obj->coords;
-    sgl_rect_t body_area = obj->area;
+    sgl_area_t title_area = obj->coords;
+    sgl_area_t body_area = obj->area;
     sgl_draw_rect_t desc = win->bg;
     sgl_pos_t align_pos;
     int16_t close_cx, close_cy, close_r, title_h;
