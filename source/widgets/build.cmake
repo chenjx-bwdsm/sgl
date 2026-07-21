@@ -24,7 +24,8 @@
 set(SGL_SOURCE
     ${SGL_SOURCE}
     ${CMAKE_CURRENT_LIST_DIR}/line/sgl_line.c
-    ${CMAKE_CURRENT_LIST_DIR}/rectangle/sgl_rectangle.c
+    ${CMAKE_CURRENT_LIST_DIR}/rect/sgl_sgl_rect.c
+    ${CMAKE_CURRENT_LIST_DIR}/rect_ext/sgl_sgl_rect_ext.c
     ${CMAKE_CURRENT_LIST_DIR}/circle/sgl_circle.c
     ${CMAKE_CURRENT_LIST_DIR}/ring/sgl_ring.c
     ${CMAKE_CURRENT_LIST_DIR}/arc/sgl_arc.c
@@ -60,4 +61,6 @@ set(SGL_SOURCE
     ${CMAKE_CURRENT_LIST_DIR}/qrcode/sgl_qrcode.c
     ${CMAKE_CURRENT_LIST_DIR}/spectrum/sgl_spectrum.c
     ${CMAKE_CURRENT_LIST_DIR}/gauge/sgl_gauge.c
+    $(CMAKE_CURRENT_LIST_DIR)/sprite/sgl_sprite.c
+    $(CMAKE_CURRENT_LIST_DIR)/filebrowser/sgl_filebrowser.c
 )
