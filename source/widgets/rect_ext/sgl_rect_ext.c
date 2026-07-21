@@ -185,7 +185,7 @@ void sgl_rect_ext_set_radius(sgl_obj_t *obj, uint8_t top_left, uint8_t top_right
  * @param  width: rectangle border width
  * @retval none
  */
-void sgl_rect_ext_ext_set_border_width(sgl_obj_t *obj, uint8_t width)
+void sgl_rect_ext_set_border_width(sgl_obj_t *obj, uint8_t width)
 {
     sgl_obj_set_border_width(obj, width);
 }
@@ -196,7 +196,7 @@ void sgl_rect_ext_ext_set_border_width(sgl_obj_t *obj, uint8_t width)
  * @param  color: rectangle border color
  * @retval none
  */
-void sgl_rect_ext_ext_set_border_color(sgl_obj_t *obj, sgl_color_t color)
+void sgl_rect_ext_set_border_color(sgl_obj_t *obj, sgl_color_t color)
 {
     sgl_rect_ext_t *rect = sgl_container_of(obj, sgl_rect_ext_t, obj);
     rect->border_color = color;
