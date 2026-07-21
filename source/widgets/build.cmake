@@ -61,6 +61,6 @@ set(SGL_SOURCE
     ${CMAKE_CURRENT_LIST_DIR}/qrcode/sgl_qrcode.c
     ${CMAKE_CURRENT_LIST_DIR}/spectrum/sgl_spectrum.c
     ${CMAKE_CURRENT_LIST_DIR}/gauge/sgl_gauge.c
-    $(CMAKE_CURRENT_LIST_DIR)/sprite/sgl_sprite.c
-    $(CMAKE_CURRENT_LIST_DIR)/filebrowser/sgl_filebrowser.c
+    ${CMAKE_CURRENT_LIST_DIR}/sprite/sgl_sprite.c
+    ${CMAKE_CURRENT_LIST_DIR}/filebrowser/sgl_filebrowser.c
 )
