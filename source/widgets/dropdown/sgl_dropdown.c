@@ -180,7 +180,7 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_even
             const int16_t text_pos_x2 = obj->coords.x2 - item_pad;
             const int16_t hline_h = item_height - SGL_DROPDOWN_OPTION_SPACE;
 
-            bg_coords.y1 = obj->coords.y1 + dropdown->option_h;
+            bg_coords.y1 = obj->coords.y1 + dropdown->option_h + 1;
             bg_coords.y2 = bg_coords.y1 + visible_items * item_height - 1;
             sgl_draw_rect(surf, &obj->area, &bg_coords, &bg_desc);
 
@@ -279,7 +279,7 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_even
         } else {
             dropdown->is_open = true;
             obj->coords.y2 = obj->coords.y1 + dropdown->option_h
-                           + visible_items * item_height - 1;
+                           + visible_items * item_height;
         }
         sgl_obj_set_dirty(obj);
         break;
@@ -292,7 +292,7 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_even
             if (sgl_scroll_release(&dropdown->sc, max_scroll)) {
                 sgl_scroll_anim_start(&dropdown->sc);
             }
-            bg_coords.y1 += dropdown->option_h;
+            bg_coords.y1 += (dropdown->option_h + 1);
             sgl_obj_update_area(&bg_coords);
         }
         break;
