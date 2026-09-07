@@ -1760,10 +1760,9 @@ static inline void draw_obj_slice(sgl_obj_t *obj, sgl_surf_t *surf)
                 sgl_draw_wireframe(surf, &obj->area, &obj->coords, obj->radius, SGL_FOCUSED_WIDTH, SGL_FOCUSED_COLOR, SGL_ALPHA_MAX);
             }
 #endif
-        }
-
-        if (obj->child != NULL) {
-            stack[top++] = obj->child;
+            if (obj->child != NULL) {
+                stack[top++] = obj->child;
+            }
         }
     }
 
