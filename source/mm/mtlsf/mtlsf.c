@@ -108,7 +108,7 @@ static inline int mem_fls(unsigned int w)
  */
 static inline int mem_fls_sizet(size_t s)
 {
-#if SIZE_MAX > UINT_MAX
+#if __SIZEOF_SIZE_T__ > 4
     unsigned int hi = (unsigned int)(s >> 32);
     if (hi) {
         return 32 + mem_fls(hi);
