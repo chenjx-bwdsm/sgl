@@ -22,6 +22,7 @@
  * SOFTWARE.
  */
 #include "sgl_littlefs.h"
+#include <stdio.h>
 #include <string.h>
 #include <sgl_mm.h>
 
@@ -200,40 +201,55 @@ static uint32_t slfs_alloc_block(slfs_ctx_t *ctx)
     if (ctx->free_head == 0) return 0;
     uint32_t block = ctx->free_head;
 
-    /* Read the free block to get next pointer */
-    if (slfs_read_block(ctx, block) != SLFS_OK) return 0;
+    /* Read the free block to get next pointer (through the cache so a dirty
+     * buffer is flushed first) */
+    if (slfs_cache_read(ctx, block) != SLFS_OK) return 0;
     uint32_t next;
     memcpy(&next, ctx->blk_buf, sizeof(uint32_t));
+
+    /* Commit the new free-list head to the superblock BEFORE reusing the
+     * block. If this write fails, the block stays owned by the on-disk free
+     * list and the allocation is refused; handing the block out anyway would
+     * let a stale on-disk superblock hand it out a second time after
+     * unmount/remount, corrupting the live owner. */
+    if (slfs_cache_read(ctx, 0) != SLFS_OK) return 0;
+    uint32_t new_count = ctx->free_count - 1;
+    memcpy(&ctx->blk_buf[24], &next, 4);
+    memcpy(&ctx->blk_buf[28], &new_count, 4);
+    slfs_cache_dirty(ctx);
+    if (slfs_cache_flush(ctx) != SLFS_OK) return 0;
+
     ctx->free_head = next;
-    ctx->free_count--;
+    ctx->free_count = new_count;
 
-    /* Zero the allocated block */
-    memset(ctx->blk_buf, 0, ctx->block_size);
-    slfs_write_block(ctx, block);
-
-    /* Update superblock */
-    slfs_read_block(ctx, 0);
-    memcpy(&ctx->blk_buf[24], &ctx->free_head, 4);
-    memcpy(&ctx->blk_buf[28], &ctx->free_count, 4);
-    slfs_write_block(ctx, 0);
-
+    /* Zero the allocated block. A failed zeroing is not fatal: the block is
+     * already off the free list and every caller initializes a freshly
+     * allocated block before its first use. */
+    if (slfs_cache_read(ctx, block) == SLFS_OK) {
+        memset(ctx->blk_buf, 0, ctx->block_size);
+        slfs_cache_dirty(ctx);
+        slfs_cache_flush(ctx);
+    }
     return block;
 }
 
 static int slfs_free_block(slfs_ctx_t *ctx, uint32_t block)
 {
     if (block == 0) return SLFS_OK;
+    if (slfs_cache_read(ctx, block) != SLFS_OK) return SLFS_ERR_IO;
     memset(ctx->blk_buf, 0, ctx->block_size);
     memcpy(ctx->blk_buf, &ctx->free_head, 4);
-    slfs_write_block(ctx, block);
+    slfs_cache_dirty(ctx);
+    if (slfs_cache_flush(ctx) != SLFS_OK) return SLFS_ERR_IO;
     ctx->free_head = block;
     ctx->free_count++;
 
     /* Update superblock */
-    slfs_read_block(ctx, 0);
+    if (slfs_cache_read(ctx, 0) != SLFS_OK) return SLFS_ERR_IO;
     memcpy(&ctx->blk_buf[24], &ctx->free_head, 4);
     memcpy(&ctx->blk_buf[28], &ctx->free_count, 4);
-    slfs_write_block(ctx, 0);
+    slfs_cache_dirty(ctx);
+    if (slfs_cache_flush(ctx) != SLFS_OK) return SLFS_ERR_IO;
     return SLFS_OK;
 }
 
@@ -472,6 +488,11 @@ static int slfs_append_data(slfs_ctx_t *ctx, uint32_t inode_idx,
             if (inode.data_head == 0) inode.data_head = block;
             inode.data_count++;
 
+            /* Re-tag the cache with the new block before initializing it:
+               chain_append leaves the cache holding another block (e.g. the
+               superblock), and flushing an untagged buffer would corrupt it. */
+            if (slfs_cache_read(ctx, block) != SLFS_OK) return SLFS_ERR_IO;
+
             /* Initialize block header */
             memset(ctx->blk_buf, 0, ctx->block_size);
             uint32_t zero = 0;
@@ -613,14 +634,34 @@ static int slfs_dir_remove_entry(slfs_ctx_t *ctx, uint32_t dir_inode,
                 return SLFS_ERR_IO;
             }
 
-            /* Tombstone the whole record so later scans do not read stale name bytes. */
+            /* Tombstone the whole record (header + name) so later scans do not
+             * resync byte-by-byte onto stale name bytes and skip live entries.
+             * append_data may split a record across block boundaries, so the
+             * clear is clamped to this block and the tail is cleared in the
+             * next block of the chain. */
             slfs_dirent_t tombstone;
+            uint32_t rec_len = (uint32_t)sizeof(tombstone) + dirent.name_len;
+            uint32_t avail = data_area - offset_in_data;
+            uint32_t clear_len = (rec_len < avail) ? rec_len : avail;
             memset(&tombstone, 0, sizeof(tombstone));
-            memcpy(ctx->blk_buf + sizeof(slfs_data_hdr_t) + offset_in_data, &tombstone, sizeof(tombstone));
+            memset(ctx->blk_buf + sizeof(slfs_data_hdr_t) + offset_in_data,
+                   0, clear_len);
             slfs_cache_dirty(ctx);
 
             if (slfs_cache_flush(ctx) != SLFS_OK) {
                 return SLFS_ERR_IO;
+            }
+
+            if (rec_len > avail) {
+                /* name bytes spill into the next block: clear them there too,
+                 * otherwise a later scan resyncs onto the stale tail */
+                uint32_t next = slfs_chain_get(ctx, dir.data_head, block_idx + 1);
+                if (next == 0) return SLFS_ERR_IO;
+                if (slfs_cache_read(ctx, next) != SLFS_OK) return SLFS_ERR_IO;
+                memset(ctx->blk_buf + sizeof(slfs_data_hdr_t),
+                       0, rec_len - avail);
+                slfs_cache_dirty(ctx);
+                if (slfs_cache_flush(ctx) != SLFS_OK) return SLFS_ERR_IO;
             }
             return SLFS_OK;
         }
@@ -685,6 +726,22 @@ static int slfs_read_file_data(slfs_ctx_t *ctx, uint32_t inode_idx,
     return (int)bytes_read;
 }
 
+/* A write interrupted by I/O errors must still account for the bytes it
+ * already committed (POSIX): persist the new size before returning the
+ * accepted prefix.  The rejected tail in the block buffer was never
+ * accepted, so it is dropped to let the inode table be read. */
+static int slfs_commit_partial(slfs_ctx_t *ctx, uint32_t inode_idx,
+                               slfs_inode_t *inode, uint32_t offset,
+                               uint32_t bytes_written, int err)
+{
+    if (bytes_written == 0) return err;
+    ctx->blk_buf_dirty = 0;
+    uint32_t new_end = offset + bytes_written;
+    if (new_end > inode->size) inode->size = new_end;
+    slfs_write_inode(ctx, inode_idx, inode);
+    return (int)bytes_written;
+}
+
 /* Write file data into an inode's data chain at a given offset */
 static int slfs_write_file_data(slfs_ctx_t *ctx, uint32_t inode_idx,
                                 uint32_t offset, const uint8_t *buf, uint32_t len)
@@ -703,22 +760,22 @@ static int slfs_write_file_data(slfs_ctx_t *ctx, uint32_t inode_idx,
         uint32_t block;
         if (inode.data_head == 0 || block_idx >= inode.data_count) {
             block = slfs_chain_append(ctx, inode.data_head);
-            if (block == 0) return bytes_written > 0 ? (int)bytes_written : SLFS_ERR_NO_SPACE;
+            if (block == 0) return slfs_commit_partial(ctx, inode_idx, &inode, offset, bytes_written, SLFS_ERR_NO_SPACE);
             if (inode.data_head == 0) inode.data_head = block;
             inode.data_count++;
-            if (slfs_cache_read(ctx, block) != SLFS_OK) return bytes_written > 0 ? (int)bytes_written : SLFS_ERR_IO;
+            if (slfs_cache_read(ctx, block) != SLFS_OK) return slfs_commit_partial(ctx, inode_idx, &inode, offset, bytes_written, SLFS_ERR_IO);
             memset(ctx->blk_buf, 0, ctx->block_size);
             uint32_t zero = 0;
             memcpy(ctx->blk_buf, &zero, 4);
             memcpy(ctx->blk_buf + 4, &zero, 4);
             slfs_cache_dirty(ctx);
-            if (slfs_cache_flush(ctx) != SLFS_OK) return bytes_written > 0 ? (int)bytes_written : SLFS_ERR_IO;
+            if (slfs_cache_flush(ctx) != SLFS_OK) return slfs_commit_partial(ctx, inode_idx, &inode, offset, bytes_written, SLFS_ERR_IO);
         } else {
             block = slfs_chain_get(ctx, inode.data_head, block_idx);
-            if (block == 0) break;
+            if (block == 0) return slfs_commit_partial(ctx, inode_idx, &inode, offset, bytes_written, SLFS_ERR_IO);
         }
 
-        if (slfs_cache_read(ctx, block) != SLFS_OK) break;
+        if (slfs_cache_read(ctx, block) != SLFS_OK) return slfs_commit_partial(ctx, inode_idx, &inode, offset, bytes_written, SLFS_ERR_IO);
 
         uint32_t avail = data_area - off_in_data;
         uint32_t chunk = (len - bytes_written < avail) ? len - bytes_written : avail;
@@ -730,7 +787,7 @@ static int slfs_write_file_data(slfs_ctx_t *ctx, uint32_t inode_idx,
         memcpy(&old_used, ctx->blk_buf + 4, 4);
         if (used > old_used) memcpy(ctx->blk_buf + 4, &used, 4);
         slfs_cache_dirty(ctx);
-        if (slfs_cache_flush(ctx) != SLFS_OK) return bytes_written > 0 ? (int)bytes_written : SLFS_ERR_IO;
+        if (slfs_cache_flush(ctx) != SLFS_OK) return slfs_commit_partial(ctx, inode_idx, &inode, offset, bytes_written, SLFS_ERR_IO);
 
         bytes_written += chunk;
         uint32_t new_end = offset + bytes_written;
@@ -928,9 +985,18 @@ static int littlefs_open(void *fs, const char *path, uint32_t flags)
                 SGL_LOG_ERROR(LFS_FS_NAME " open: read inode failed");
                 return SLFS_ERR_IO;
             }
-            if (inode.data_head) slfs_free_chain(ctx, inode.data_head);
+            uint32_t old_head = inode.data_head;
+            /* Persist the emptied inode BEFORE freeing the chain: if the
+             * write fails, the on-disk file stays fully intact and open
+             * reports the failure instead of silently reporting success
+             * with the old size. Freeing first would leave a dangling
+             * chain on a failed inode write. */
             inode.data_head = 0; inode.data_count = 0; inode.size = 0;
-            slfs_write_inode(ctx, found, &inode);
+            if (slfs_write_inode(ctx, found, &inode) != SLFS_OK) {
+                SGL_LOG_ERROR(LFS_FS_NAME " open: truncate write inode failed");
+                return SLFS_ERR_IO;
+            }
+            if (old_head) slfs_free_chain(ctx, old_head);
         }
     } else {
         if (!(flags & SGL_O_CREAT)) {
