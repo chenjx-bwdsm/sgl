@@ -185,7 +185,7 @@ int sgl_event_queue_init(void);
 /**
  * @brief Push an event into the event queue
  * @param event The event to be pushed
- * @return 0 on success, -1 on failure
+ * @return none
  */
 void sgl_event_queue_push(sgl_event_t event);
 

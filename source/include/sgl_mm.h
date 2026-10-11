@@ -70,6 +70,21 @@ void sgl_mm_add_pool(void *mem_start, size_t len);
 void* sgl_malloc(size_t size);
 
 /**
+ * @brief  memory alloc with initial zero, the function is unsafe, you should ensure that
+ *        the requested size is smaller than the free size of memory
+ * @param  size   request size of memory
+ * @return point to request memory address
+*/
+static void* sgl_zalloc(size_t size)
+{
+    void *p = sgl_malloc(size);
+    if (p) {
+        memset(p, 0, size);
+    }
+    return p;
+}
+
+/**
  * @brief  memory realloc, the function is unsafe, you should ensure that 
  *         the requested size is smaller than the free size of memory
  * @param  p      the pointer of request size of memory

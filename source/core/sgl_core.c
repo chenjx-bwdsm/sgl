@@ -169,7 +169,7 @@ void sgl_obj_add_child(sgl_obj_t *parent, sgl_obj_t *obj)
     if (parent->child) {
         while (tail->sibling != NULL) {
             tail = tail->sibling;
-        };
+        }
         tail->sibling = obj;
     }
     else {
@@ -743,6 +743,7 @@ int sgl_init(void)
     sgl_system.rotation = (sgl_color_t*)sgl_malloc(sgl_system.fbdev.fbinfo.buffer_size * sizeof(sgl_color_t));
     if (sgl_system.rotation == NULL) {
         SGL_LOG_ERROR("sgl_init: alloc rotation buffer failed");
+        sgl_free(obj);
         return -1;
     }
 #if (CONFIG_SGL_FBDEV_RUNTIME_ROTATION)
