@@ -1,4 +1,4 @@
-/* source/fs/fatfs/sgl_fatfs.c
+﻿/* source/fs/fatfs/sgl_fatfs.c
  *
  * MIT License
  *
@@ -289,10 +289,32 @@ static inline int fat_write_sector(fat_ctx_t *ctx, uint32_t sector, const uint8_
     return ctx->dev->write_sectors(ctx->dev, sector + ctx->part_offset, buf, 1);
 }
 
-/* Cached sector read */
+/* Flush cache */
+static int fat_cache_flush(fat_ctx_t *ctx)
+{
+    if (ctx->sec_buf_dirty && ctx->sec_buf_num != 0xFFFFFFFF) {
+        if (fat_write_sector(ctx, ctx->sec_buf_num, ctx->sec_buf) != 0) {
+            SGL_LOG_ERROR(FAT_FS_NAME " cache_flush: write sec=%d failed", (int)ctx->sec_buf_num);
+            return FAT_ERR_IO;
+        }
+        ctx->sec_buf_dirty = 0;
+    }
+    return FAT_OK;
+}
+
 static int fat_cache_read(fat_ctx_t *ctx, uint32_t sector)
 {
-    if (ctx->sec_buf_num == sector) return FAT_OK;
+    if (ctx->sec_buf_num == sector) {
+        /* Same-tag hit: the dirty buffer is always fresher than the
+         * medium for its own sector, so write it through before handing
+         * the buffer back. Re-serving stale bytes here corrupts the
+         * device image when callers later memcpy into the buffer and
+         * flush the whole sector -- fatal where the FAT and the root
+         * directory share sectors (FAT12/16 fixed root region). */
+        if (ctx->sec_buf_dirty && fat_cache_flush(ctx) != FAT_OK) return FAT_ERR_IO;
+        return FAT_OK;
+    }
+
     if (ctx->sec_buf_dirty && ctx->sec_buf_num != 0xFFFFFFFF) {
         if (fat_write_sector(ctx, ctx->sec_buf_num, ctx->sec_buf) != 0) {
             SGL_LOG_ERROR(FAT_FS_NAME " cache_read: flush dirty sec=%d failed", (int)ctx->sec_buf_num);
@@ -312,19 +334,6 @@ static int fat_cache_read(fat_ctx_t *ctx, uint32_t sector)
 static inline void fat_cache_dirty(fat_ctx_t *ctx)
 {
     ctx->sec_buf_dirty = 1;
-}
-
-/* Flush cache */
-static int fat_cache_flush(fat_ctx_t *ctx)
-{
-    if (ctx->sec_buf_dirty && ctx->sec_buf_num != 0xFFFFFFFF) {
-        if (fat_write_sector(ctx, ctx->sec_buf_num, ctx->sec_buf) != 0) {
-            SGL_LOG_ERROR(FAT_FS_NAME " cache_flush: write sec=%d failed", (int)ctx->sec_buf_num);
-            return FAT_ERR_IO;
-        }
-        ctx->sec_buf_dirty = 0;
-    }
-    return FAT_OK;
 }
 
 /* Invalidate cache; returns FAT_OK, or FAT_ERR_IO when a dirty sector
@@ -827,7 +836,12 @@ static int fat_write_dir_entry(fat_ctx_t *ctx, uint32_t sector, uint16_t offset,
     }
     memcpy(&ctx->sec_buf[offset], entry, FAT_DIR_ENTRY_SIZE);
     fat_cache_dirty(ctx);
-    return FAT_OK;
+    /* Write through immediately: dir-entry writes usually follow FAT
+     * mutations (free_chain/create_entry) whose effects are still in the
+     * deferred write-back buffer, and the write itself destroys cached
+     * FAT bytes in the buffer. Deferring lets a later cache_read of the
+     * same sector hand back those destroyed bytes. */
+    return fat_cache_flush(ctx);
 }
 
 /* Search a directory for a given name component.
@@ -1388,7 +1402,7 @@ static int fatfs_open(void *fs, const char *path, uint32_t flags)
                 uint32_t cb = (uint32_t)ctx->cluster_size * ctx->sector_size;
                 /* last cluster holding valid data; when file_size sits
                  * exactly on a cluster boundary the write path extends
-                 * the chain lazily, so never point past the end here —
+                 * the chain lazily, so never point past the end here --
                  * pointing past it falls back to start_cluster and the
                  * next append would overwrite the file from its head */
                 uint32_t idx = (f->file_size - 1) / cb;
