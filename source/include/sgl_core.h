@@ -658,10 +658,12 @@ int sgl_fbdev_register(sgl_fbinfo_t *fbinfo);
  * @param buffer_size the frame buffer device buffer size, for example: 16bit color and 320 * 10 line buffer, you should set it to 320 * 10
  * @param resolution_x the frame buffer device resolution x
  * @param resolution_y the frame buffer device resolution y
+ * @param flush_area the flush area
  * @return int, 0 if success, -1 if failed
  * @note you must check the result of this function
  */
-int sgl_fbdev_register_dev(sgl_color_t *buffer0, sgl_color_t *buffer1, uint32_t buffer_size, uint16_t resolution_x, uint16_t resolution_y);
+int sgl_fbdev_register_dev(sgl_color_t *buffer0, sgl_color_t *buffer1, uint32_t buffer_size, uint16_t resolution_x, uint16_t resolution_y, 
+                           void (*flush_area)(sgl_area_t *area, sgl_color_t *src));
 
 /**
  * @brief set framebuffer device flush ready
