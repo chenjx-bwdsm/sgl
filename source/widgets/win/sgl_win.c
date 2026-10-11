@@ -61,7 +61,11 @@ static void sgl_win_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_event_t *
         sgl_draw_string(surf, &obj->area, align_pos.x + 2, align_pos.y + obj->border, win->title_text, 
                           win->title_text_color, win->bg.alpha, win->title_font
                         );
-        sgl_draw_fill_circle(surf, &title_area, close_cx, close_cy, close_r, win->close_color, win->bg.alpha);
+        /* draw a compact cross centered in the close box; the clickable
+         * area keeps using close_r so it stays easy to hit */
+        const int16_t cross_r = (int16_t)(close_r / 2);
+        sgl_draw_cross(surf, &title_area, (int16_t)(close_cx - cross_r), (int16_t)(close_cy - cross_r),
+                       cross_r, win->close_color, 1, win->bg.alpha);
     }
     else if (evt->type == SGL_EVENT_PRESSED || evt->type == SGL_EVENT_CLICKED) {
         if (evt->pos.x >= (close_cx - close_r) && evt->pos.x <= (close_cx + close_r) 
