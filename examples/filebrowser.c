@@ -3,16 +3,24 @@
  * File browser example.
  *
  * Two simulated block devices are mounted with RAMFS ("/flash" and "/sd"),
- * seeded with sample files, then two sgl_filebrowser widgets each point at a
- * device's root via sgl_filebrowser_set_root().
+ * seeded with sample files, then a single sgl_filebrowser widget opens at the
+ * virtual "/" root, which lists both devices by name; clicking one enters it.
  */
 #include <sgl.h>
 #include <string.h>
 
 /* Simulated block devices. RAMFS ignores the IO callbacks; it only needs a
- * distinct, stable pointer to identify each "disk". */
-static sgl_block_dev_t g_flash_dev;
-static sgl_block_dev_t g_sd_dev;
+ * distinct, stable pointer to identify each "disk". The info->name is what the
+ * file browser shows in its device list. */
+static const sgl_block_dev_info_t g_flash_info = { .name = "flash" };
+static const sgl_block_dev_info_t g_sd_info    = { .name = "sd" };
+static sgl_block_dev_t g_flash_dev = { .info = &g_flash_info };
+static sgl_block_dev_t g_sd_dev    = { .info = &g_sd_info };
+
+/* Give each RAMFS a capacity so the browser's device list can show the
+ * total / available space next to each device name. */
+static sgl_ramfs_config_t g_flash_cfg = { .max_size =  2 * 1024 * 1024 }; /* 2 MB  */
+static sgl_ramfs_config_t g_sd_cfg     = { .max_size = 16 * 1024 * 1024 }; /* 16 MB */
 
 static void seed_file(const char *path, const char *content)
 {
@@ -42,34 +50,24 @@ static void seed_demo_content(void)
 
 void sgl_filebrowser_examples(sgl_obj_t *parent)
 {
-    sgl_obj_t *fb_flash;
-    sgl_obj_t *fb_sd;
-
     /* 1. mount one filesystem per block device */
     sgl_ramfs_register();   /* ignore "already registered" */
-    if (sgl_fs_mount("/flash", "ramfs", &g_flash_dev, NULL) != 0) {
+    if (sgl_fs_mount("/flash", "ramfs", &g_flash_dev, &g_flash_cfg) != 0) {
         SGL_LOG_ERROR("filebrowser example: mount /flash failed");
         return;
     }
-    if (sgl_fs_mount("/sd", "ramfs", &g_sd_dev, NULL) != 0) {
+
+    if (sgl_fs_mount("/sd", "ramfs", &g_sd_dev, &g_sd_cfg) != 0) {
         SGL_LOG_ERROR("filebrowser example: mount /sd failed");
         return;
     }
     seed_demo_content();
 
-    /* 2. one browser per device, opened at the device's mount point.
-     *    Placed on the right half so the avi demo can keep the left. */
-    fb_flash = sgl_filebrowser_create(parent);
-    sgl_obj_set_pos(fb_flash, 380, 20);
-    sgl_obj_set_size(fb_flash, 200, 260);
-    sgl_filebrowser_set_text_font(fb_flash, &consolas14);
-    sgl_filebrowser_set_path_prefix(fb_flash, "FLASH:");
-    sgl_filebrowser_set_root(fb_flash, "/flash");
-
-    fb_sd = sgl_filebrowser_create(parent);
-    sgl_obj_set_pos(fb_sd, 595, 20);
-    sgl_obj_set_size(fb_sd, 190, 260);
-    sgl_filebrowser_set_text_font(fb_sd, &consolas14);
-    sgl_filebrowser_set_path_prefix(fb_sd, "SD:");
-    sgl_filebrowser_set_root(fb_sd, "/sd");
+    /* 2. one browser opens at the "/" device list; the user clicks a device
+     *    ("flash" / "sd") to enter its file system. Placed on the right half
+     *    so the avi demo can keep the left. */
+    sgl_obj_t *fb = sgl_filebrowser_create(parent);
+    sgl_obj_set_pos(fb, 380, 20);
+    sgl_obj_set_size(fb, 405, 260);
+    sgl_filebrowser_set_text_font(fb, &consolas14);
 }

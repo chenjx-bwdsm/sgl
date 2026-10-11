@@ -175,6 +175,30 @@ void sgl_draw_chevron_down(sgl_surf_t *surf, sgl_area_t *area, int16_t x, int16_
 }
 
 /**
+ * @brief draw a cross (X) made of two diagonal lines
+ * @param surf surface
+ * @param area area that contains the cross
+ * @param x left edge of the cross bounding box
+ * @param y top edge of the cross bounding box
+ * @param size half size of the cross, it spans 2 * size + 1 px in both directions
+ * @param color cross color
+ * @param width line width
+ * @param alpha alpha of color
+ * @return none
+ */
+void sgl_draw_cross(sgl_surf_t *surf, sgl_area_t *area, int16_t x, int16_t y, int16_t size, sgl_color_t color, uint8_t width, uint8_t alpha)
+{
+    if (unlikely(size <= 0)) {
+        return;
+    }
+
+    sgl_draw_line_noaa(surf, area, x, y,
+                       (int16_t)(x + 2 * size), (int16_t)(y + 2 * size), color, width, alpha);
+    sgl_draw_line_noaa(surf, area, (int16_t)(x + 2 * size), y,
+                       x, (int16_t)(y + 2 * size), color, width, alpha);
+}
+
+/**
  * @brief transform a surface
  * @param dst destination surface
  * @param src source surface

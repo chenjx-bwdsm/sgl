@@ -327,14 +327,17 @@ static int fat_cache_flush(fat_ctx_t *ctx)
     return FAT_OK;
 }
 
-/* Invalidate cache */
-static void fat_cache_invalidate(fat_ctx_t *ctx)
+/* Invalidate cache; returns FAT_OK, or FAT_ERR_IO when a dirty sector
+ * could not be written back (callers decide whether to propagate) */
+static int fat_cache_invalidate(fat_ctx_t *ctx)
 {
     if (ctx->sec_buf_dirty && ctx->sec_buf_num != 0xFFFFFFFF) {
-        fat_write_sector(ctx, ctx->sec_buf_num, ctx->sec_buf);
+        if (fat_write_sector(ctx, ctx->sec_buf_num, ctx->sec_buf) != FAT_OK)
+            return FAT_ERR_IO;
     }
     ctx->sec_buf_num = 0xFFFFFFFF;
     ctx->sec_buf_dirty = 0;
+    return FAT_OK;
 }
 
 /* Convert cluster number to sector number */
@@ -1326,11 +1329,12 @@ static int fatfs_unmount(void *fs, const char *mount_point)
     (void)mount_point;
     fat_ctx_t *ctx = (fat_ctx_t *)fs;
     if (!ctx) return FAT_ERR_INVALID;
-    fat_cache_invalidate(ctx);
+    /* a dirty sector lost here is real data loss on the medium: report it */
+    int rc = fat_cache_invalidate(ctx);
     vol_dev_map[ctx->vol_id] = NULL;
     sgl_free(ctx->sec_buf);
     sgl_free(ctx);
-    return FAT_OK;
+    return rc;
 }
 
 static int fatfs_open(void *fs, const char *path, uint32_t flags)
@@ -1440,7 +1444,12 @@ static int fatfs_close(void *fs, int fd)
             entry.fst_clus_lo = (uint16_t)(start_cluster & 0xFFFF);
             entry.fst_clus_hi = (uint16_t)((start_cluster >> 16) & 0xFFFF);
             entry.file_size = file_size;
-            fat_write_dir_entry(ctx, esec, eoff, &entry);
+            /* don't lose the first error: propagate entry writeback
+             * failure too (was silently dropped before) */
+            if (fat_write_dir_entry(ctx, esec, eoff, &entry) != FAT_OK)
+                rc = FAT_ERR_IO;
+        } else {
+            rc = FAT_ERR_IO;   /* directory entry metadata never reached disk */
         }
     }
     return rc;
@@ -1795,9 +1804,14 @@ static int fatfs_sync(void *fs)
                 entry.fst_clus_lo = (uint16_t)(f->start_cluster & 0xFFFF);
                 entry.fst_clus_hi = (uint16_t)((f->start_cluster >> 16) & 0xFFFF);
                 entry.file_size = f->file_size;
-                fat_write_dir_entry(ctx, f->entry_sector, f->entry_offset, &entry);
+                if (fat_write_dir_entry(ctx, f->entry_sector, f->entry_offset, &entry) == FAT_OK) {
+                    f->dirty = 0;   /* clear only after the writeback succeeded */
+                } else {
+                    rc = FAT_ERR_IO;
+                }
+            } else {
+                rc = FAT_ERR_IO;    /* keep f->dirty so a later sync retries */
             }
-            f->dirty = 0;
         }
     }
     /* fat_write_dir_entry is write-back: flush the entries dirtied above */
@@ -1846,7 +1860,9 @@ static int fatfs_format(void *fs)
     wr16(&buf[24], 63); wr16(&buf[26], 255);
     buf[510] = 0x55; buf[511] = 0xAA;
 
-    fat_cache_invalidate(ctx);
+    /* discard the stale cache on purpose: format reinitializes the medium,
+     * so a failed writeback of pre-format state is not an error here */
+    (void)fat_cache_invalidate(ctx);
     if (fat_write_sector(ctx, 0, buf) != 0) return FAT_ERR_IO;
 
     memset(buf, 0, ctx->sector_size);

@@ -86,24 +86,6 @@ static void sgl_filebrowser_join_path(char *dst, size_t dst_size,
     out[name_len] = '\0';
 }
 
-static void sgl_filebrowser_update_full_path(sgl_filebrowser_t *fb)
-{
-    const char *prefix = fb->path_prefix ? fb->path_prefix : "";
-    size_t p_len = strlen(prefix);
-    size_t c_len = strlen(fb->current_path);
-
-    if (p_len + c_len + 1 > sizeof(fb->full_path)) {
-        if (c_len + 1 <= sizeof(fb->full_path)) {
-            memcpy(fb->full_path, fb->current_path, c_len + 1);
-        } else {
-            fb->full_path[0] = '\0';
-        }
-        return;
-    }
-    memcpy(fb->full_path, prefix, p_len);
-    memcpy(fb->full_path + p_len, fb->current_path, c_len + 1);
-}
-
 static const char *sgl_filebrowser_match_icon(const sgl_filebrowser_t *fb, const sgl_filebrowser_item_t *item)
 {
     if (fb->icons == NULL || item == NULL) return NULL;
@@ -153,6 +135,50 @@ static void sgl_filebrowser_close_dir(sgl_filebrowser_t *fb)
     fb->dir_cursor = 0;
 }
 
+/* Format a byte count into a compact human string, e.g. 10485760 -> "10.0M",
+ * 512 -> "512B". Uses binary (1024) units B/K/M/G with one fractional digit. */
+static void sgl_filebrowser_format_size(uint64_t bytes, char *out, size_t n)
+{
+    static const char units[] = "BKMG";
+    int u = 0;
+    uint64_t v = bytes;
+    while (v >= 1024ULL && u < 3) { v >>= 10; u++; }
+
+    if (u == 0) {
+        sgl_snprintf(out, n, "%d%c", (int)bytes, units[0]);
+    } else {
+        uint64_t scale  = 1ULL << (u * 10);
+        uint64_t whole  = bytes / scale;
+        uint64_t frac10 = ((bytes % scale) * 10) / scale;
+        sgl_snprintf(out, n, "%d.%d%c",
+                     (int)whole, (int)frac10, units[u]);
+    }
+}
+
+/* Draw the free/total capacity of the device at mount index `mnt_idx`,
+ * right-aligned to the row's right edge. No-op when capacity is unknown.
+ * Computed on the fly so no per-item buffer is needed. */
+static void sgl_filebrowser_draw_dev_capacity(sgl_filebrowser_t *fb, sgl_surf_t *surf,
+                                              sgl_obj_t *obj, sgl_area_t *list_area,
+                                              int item_pad, int16_t text_y, int16_t mnt_idx)
+{
+    const char *mp = sgl_fs_mount_get_path((uint32_t)mnt_idx);
+    sgl_statvfs_t sv;
+    if (mp == NULL || sgl_fs_statvfs(mp, &sv) != SGL_FS_OK || sv.f_blocks == 0) return;
+
+    uint64_t total = (uint64_t)sv.f_bsize * sv.f_blocks;
+    uint64_t avail = (uint64_t)sv.f_bsize * sv.f_bfree;
+    char ts[16], as[16], cap[24];
+    sgl_filebrowser_format_size(total, ts, sizeof(ts));
+    sgl_filebrowser_format_size(avail, as, sizeof(as));
+    sgl_snprintf(cap, sizeof(cap), "%s/%s", as, ts);
+
+    const int cap_w = (int)sgl_font_get_string_width(cap, fb->font);
+    const int16_t cap_x = (int16_t)(obj->coords.x2 - obj->border - item_pad - cap_w);
+    sgl_draw_string(surf, list_area, cap_x, text_y,
+                    cap, fb->item_text_color, fb->alpha, fb->font);
+}
+
 /* Ensure the readdir cursor points to the entry whose logical index (in the
  * "content" sequence, i.e. excluding "..") is `target`.
  * Returns true on success (handle is open, cursor == target).
@@ -160,6 +186,14 @@ static void sgl_filebrowser_close_dir(sgl_filebrowser_t *fb)
 static bool sgl_filebrowser_seek_dir(sgl_filebrowser_t *fb, int16_t target)
 {
     if (target < 0) target = 0;
+
+    /* At the virtual "/" root the list is the mounted block devices, which
+     * are enumerated directly from the VFS mount table (no dir handle). */
+    if (sgl_filebrowser_is_root(fb)) {
+        fb->dir_handle = -1;
+        fb->dir_cursor = target;
+        return true;
+    }
 
     /* If we need to go backwards, we must reopen. Some FS provide seekdir but
      * SGL's abstraction here does not, so rewind = closedir + opendir. */
@@ -192,9 +226,17 @@ static bool sgl_filebrowser_seek_dir(sgl_filebrowser_t *fb, int16_t target)
 
 /* Read the next valid entry from the persistent handle.
  * Returns 1 on success, 0 on EOF / error. */
-static int sgl_filebrowser_read_next(sgl_filebrowser_t *fb,
-                                     char *name, size_t name_size, uint32_t *type)
+static int sgl_filebrowser_read_next(sgl_filebrowser_t *fb, char *name, size_t name_size, uint32_t *type)
 {
+    if (sgl_filebrowser_is_root(fb)) {
+        int cnt = sgl_fs_mount_count();
+        if (fb->dir_cursor >= cnt) return 0;
+        const char *nm = sgl_fs_mount_get_name((uint32_t)fb->dir_cursor);
+        sgl_snprintf(name, name_size, "%s", nm ? nm : "?");
+        *type = SGL_S_IFDIR;
+        fb->dir_cursor++;
+        return 1;
+    }
     if (fb->dir_handle < 0) return 0;
     for (;;) {
         int r = sgl_fs_readdir(fb->dir_handle, name, name_size, type);
@@ -408,18 +450,23 @@ static void sgl_filebrowser_load_dir(sgl_filebrowser_t *fb, const char *path)
     }
     fb->current_path[sizeof(fb->current_path) - 1] = '\0';
     sgl_filebrowser_trim_trailing_slash(fb->current_path);
-    sgl_filebrowser_update_full_path(fb);
 
-    /* Count entries once. Cache stays empty; will be filled lazily on draw. */
-    uint16_t count = sgl_filebrowser_is_root(fb) ? 0 : 1; /* ".." */
-    int dd = -1;
-    if (sgl_fs_opendir(fb->current_path, &dd) == SGL_FS_OK) {
-        char name[SGL_FILEBROWSER_NAME_MAX_LEN];
-        uint32_t type;
-        while (sgl_fs_readdir(dd, name, sizeof(name), &type) > 0) {
-            if (sgl_filebrowser_is_valid_dir_entry(name)) count++;
+    /* Count entries once. Cache stays empty; will be filled lazily on draw.
+     * The virtual "/" root lists mounted block devices, not a directory. */
+    uint16_t count;
+    if (sgl_filebrowser_is_root(fb)) {
+        count = (uint16_t)sgl_fs_mount_count();
+    } else {
+        count = 1; /* ".." */
+        int dd = -1;
+        if (sgl_fs_opendir(fb->current_path, &dd) == SGL_FS_OK) {
+            char name[SGL_FILEBROWSER_NAME_MAX_LEN];
+            uint32_t type;
+            while (sgl_fs_readdir(dd, name, sizeof(name), &type) > 0) {
+                if (sgl_filebrowser_is_valid_dir_entry(name)) count++;
+            }
+            sgl_fs_closedir(dd);
         }
-        sgl_fs_closedir(dd);
     }
     fb->item_num = count;
 
@@ -481,7 +528,7 @@ static void sgl_filebrowser_draw_path_bar(sgl_surf_t *surf, sgl_filebrowser_t *f
     };
     sgl_draw_fill_rect(surf, &path_area, &path_rect, obj->radius, fb->path_color, fb->alpha);
     sgl_draw_string(surf, &obj->area, path_rect.x1 + obj->radius + SGL_FILEBROWSER_ITEM_PAD, path_rect.y1 + SGL_FILEBROWSER_ITEM_PAD,
-                          fb->full_path, fb->item_text_color, fb->alpha, fb->font);
+                          fb->current_path, fb->item_text_color, fb->alpha, fb->font);
 }
 
 static void sgl_filebrowser_update_selection_area(sgl_obj_t *obj, int16_t item_y, int16_t item_height)
@@ -629,6 +676,11 @@ static void sgl_filebrowser_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_e
             }
             sgl_draw_string(surf, &list_area, text_x, text_y,
                             item->text, fb->item_text_color, fb->alpha, fb->font);
+            /* Device list (root): append free/total capacity, right-aligned. */
+            if (sgl_filebrowser_is_root(fb)) {
+                sgl_filebrowser_draw_dev_capacity(fb, surf, obj, &list_area,
+                                                  item_pad, text_y, idx);
+            }
         }
 
         sgl_scroll_draw_bar(surf, obj, &fb->sc, max_scroll, &viewport, sgl_color_invert(fb->bg_color));
@@ -703,8 +755,16 @@ static void sgl_filebrowser_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_e
         else if (fb->selected != NULL && fb->selected->type == SGL_S_IFDIR) {
             if (fb->pending_dir_index == clicked_index) {
                 char next_path[SGL_FILEBROWSER_PATH_MAX_LEN];
-                sgl_filebrowser_join_path(next_path, sizeof(next_path),
-                                          fb->current_path, fb->selected->text);
+                if (sgl_filebrowser_is_root(fb)) {
+                    /* Device list: enter the clicked device's mount point */
+                    const char *mnt = sgl_fs_mount_get_path((uint32_t)clicked_index);
+                    if (mnt == NULL) { fb->pending_dir_index = -1; break; }
+                    strncpy(next_path, mnt, sizeof(next_path) - 1);
+                    next_path[sizeof(next_path) - 1] = '\0';
+                } else {
+                    sgl_filebrowser_join_path(next_path, sizeof(next_path),
+                                              fb->current_path, fb->selected->text);
+                }
                 sgl_filebrowser_load_dir(fb, next_path);
                 sgl_obj_set_dirty(obj);
             } else {
@@ -786,7 +846,6 @@ sgl_obj_t* sgl_filebrowser_create(sgl_obj_t *parent)
     fb->item_text_color      = SGL_THEME_TEXT_COLOR;
     fb->icon_color           = sgl_rgb(121, 177, 254);
     fb->path_color           = SGL_COLOR_WHEAT;
-    fb->path_prefix          = "";
     fb->pending_dir_index    = -1;
     fb->item_selected        = -1;
     fb->cache_start_index    = -1;
@@ -794,21 +853,8 @@ sgl_obj_t* sgl_filebrowser_create(sgl_obj_t *parent)
     fb->sc.bar_alpha         = 200;
     sgl_scroll_reset(&fb->sc);
     strcpy(fb->current_path, "/");
-    sgl_filebrowser_update_full_path(fb);
     sgl_filebrowser_load_dir(fb, "/");
     return &fb->obj;
-}
-
-/**
- * @brief Set the file browser object path.
- * @param obj: file browser object
- * @param path: path to set
- */
-void sgl_filebrowser_set_root(sgl_obj_t *obj, const char *path)
-{
-    sgl_filebrowser_t *fb = sgl_container_of(obj, sgl_filebrowser_t, obj);
-    sgl_filebrowser_load_dir(fb, path);
-    sgl_obj_set_dirty(obj);
 }
 
 /**
@@ -1046,18 +1092,4 @@ void sgl_filebrowser_set_alpha(sgl_obj_t *obj, uint8_t alpha)
 void sgl_filebrowser_set_border_width(sgl_obj_t *obj, uint8_t width)
 {
     sgl_obj_set_border_width(obj, width);
-}
-
-/**
- * @brief Set the path prefix of the file browser object.
- * @param obj: file browser object
- * @param prefix: path prefix to set
- * @return none
- */
-void sgl_filebrowser_set_path_prefix(sgl_obj_t *obj, const char *prefix)
-{
-    sgl_filebrowser_t *fb = sgl_container_of(obj, sgl_filebrowser_t, obj);
-    fb->path_prefix = (prefix != NULL) ? prefix : "";
-    sgl_filebrowser_update_full_path(fb);
-    sgl_obj_set_dirty(obj);
 }

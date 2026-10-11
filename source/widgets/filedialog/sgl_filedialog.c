@@ -563,16 +563,30 @@ static uint16_t sgl_filedialog_target_capacity(int item_height, int list_h)
     return (uint16_t)cap;
 }
 
-/* OK button rectangle inside the bottom bar */
+/* OK button (pill) rectangle inside the bottom bar.
+ * The bar's visible area spans from list_y2 + 1 (its top, where the rounded
+ * bar corners stop being clipped) down to the dialog's inner bottom edge.
+ * The pill is right-aligned to the bar and vertically centered within it.
+ * Both the draw path and the click hit-test call this, so they always agree. */
 static void sgl_filedialog_ok_rect(const sgl_filedialog_t *fd, const sgl_obj_t *obj,
-                                   int item_height, sgl_area_t *out)
+                                   int list_y2, sgl_area_t *out)
 {
+    const int font_h = sgl_font_get_height(fd->font);
     const int text_w = sgl_font_get_string_width(SGL_FILEDIALOG_OK_TEXT, fd->font);
-    const int w = text_w + 2 * (item_height / 2);
-    out->x2 = obj->coords.x2 - obj->border - SGL_FILEDIALOG_ITEM_PAD - 2;
-    out->x1 = out->x2 - w;
-    out->y1 = obj->coords.y2 - obj->border - item_height + SGL_FILEDIALOG_ITEM_SPACE;
-    out->y2 = obj->coords.y2 - obj->border - SGL_FILEDIALOG_ITEM_SPACE;
+
+    const int16_t bar_top = (int16_t)(list_y2 + 1);
+    const int16_t bar_bot = (int16_t)(obj->coords.y2 - obj->border);
+    const int bar_h = bar_bot - bar_top + 1;
+
+    /* Fill the bar minus a vertical margin, but never smaller than the text. */
+    int btn_h = bar_h - 2 * SGL_FILEDIALOG_ITEM_SPACE;
+    if (btn_h < font_h) btn_h = font_h;
+    const int w = text_w + 2 * (btn_h / 2);
+
+    out->x2 = (int16_t)(obj->coords.x2 - obj->border - SGL_FILEDIALOG_ITEM_PAD - 2);
+    out->x1 = (int16_t)(out->x2 - w);
+    out->y1 = (int16_t)(bar_top + (bar_h - btn_h) / 2);
+    out->y2 = (int16_t)(out->y1 + btn_h - 1);
 }
 
 static bool sgl_filedialog_pos_in_area(const sgl_area_t *area, int16_t x, int16_t y)
@@ -662,7 +676,7 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
                                : (int16_t)0;
     const int16_t text_x = obj->coords.x1 + item_pad + icon_col_w;
     const int list_y1    = obj->coords.y1 + item_height;          /* below the title bar */
-    const int list_y2    = obj->coords.y2 - item_height;          /* above the bottom bar */
+    const int list_y2    = obj->coords.y2 - item_height + 1;          /* above the bottom bar */
     const int list_h     = sgl_max(0, list_y2 - list_y1 + 1);
 
     sgl_area_t list_area = {
@@ -711,14 +725,14 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
                             title_rect.y1 + SGL_FILEDIALOG_ITEM_PAD,
                             title_text, fd->item_text_color, fd->alpha, fd->font);
 
-            /* close box at the right end of the title bar */
+            /* close box at the right end of the title bar: draw an X (cross) */
             const int16_t cx2 = obj->coords.x2 - obj->border - SGL_FILEDIALOG_ITEM_PAD;
             const int16_t cx1 = cx2 - item_height + 2 * SGL_FILEDIALOG_ITEM_PAD;
-            const int16_t cx  = cx1 + (cx2 - cx1 -
-                                 sgl_font_get_string_width("X", fd->font)) / 2;
-            sgl_draw_string(surf, &obj->area, cx,
-                            title_rect.y1 + SGL_FILEDIALOG_ITEM_PAD,
-                            "X", fd->item_text_color, fd->alpha, fd->font);
+            const int16_t ccx   = (int16_t)((cx1 + cx2) / 2);            /* box center x */
+            const int16_t ccy   = (int16_t)(title_y1 + item_height / 2); /* bar center y */
+            const int16_t csize = (int16_t)((item_height - 4 * SGL_FILEDIALOG_ITEM_PAD) / 2);
+            sgl_draw_cross(surf, &obj->area, (int16_t)(ccx - csize), (int16_t)(ccy - csize),
+                           csize, fd->item_text_color, 1, fd->alpha);
         }
 
         /* --- bottom bar: selection hint + OK button --- */
@@ -743,9 +757,9 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
             }
 
             sgl_area_t ok_rect;
-            sgl_filedialog_ok_rect(fd, obj, item_height, &ok_rect);
+            sgl_filedialog_ok_rect(fd, obj, list_y2, &ok_rect);
             const bool can_ok = sgl_filedialog_can_confirm(fd);
-            sgl_draw_fill_rect(surf, &bar_area, &ok_rect, (ok_rect.y2 - ok_rect.y1) / 2,
+            sgl_draw_fill_rect(surf, &bar_area, &ok_rect, 4,
                                can_ok ? fd->btn_color : fd->btn_disabled_color, fd->alpha);
             {
                 const int tw = sgl_font_get_string_width(SGL_FILEDIALOG_OK_TEXT, fd->font);
@@ -875,7 +889,7 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
 
         /* OK button on the bottom bar */
         sgl_area_t ok_rect;
-        sgl_filedialog_ok_rect(fd, obj, item_height, &ok_rect);
+        sgl_filedialog_ok_rect(fd, obj, list_y2, &ok_rect);
         if (sgl_filedialog_pos_in_area(&ok_rect, evt->pos.x, evt->pos.y)) {
             sgl_filedialog_confirm(fd);
             break;

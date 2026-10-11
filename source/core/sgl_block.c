@@ -78,6 +78,7 @@ int sgl_block_dev_ioctl(const sgl_block_dev_t *dev, uint8_t cmd, void *param)
 
 /* W25Q16 chip information */
 const sgl_block_dev_info_t sgl_w25q16_info = {
+    .name = "W25Q16",
     .sector_count = 512,
     .sector_size = 4096,
     .block_size = 1,
@@ -87,6 +88,7 @@ const sgl_block_dev_info_t sgl_w25q16_info = {
 
 /* W25Q32 chip information */
 const sgl_block_dev_info_t sgl_w25q32_info = {
+    .name = "W25Q32",
     .sector_count = 1024,
     .sector_size = 4096,
     .block_size = 1,
@@ -96,6 +98,7 @@ const sgl_block_dev_info_t sgl_w25q32_info = {
 
 /* W25Q64 chip information */
 const sgl_block_dev_info_t sgl_w25q64_info = {
+    .name = "W25Q64",
     .sector_count = 2048,
     .sector_size = 4096,
     .block_size = 1,
@@ -105,6 +108,7 @@ const sgl_block_dev_info_t sgl_w25q64_info = {
 
 /* W25Q128 chip information */
 const sgl_block_dev_info_t sgl_w25q128_info = {
+    .name = "W25Q128",
     .sector_count = 4096,
     .sector_size = 4096,
     .block_size = 1,
@@ -114,6 +118,7 @@ const sgl_block_dev_info_t sgl_w25q128_info = {
 
 /* W25Q256 chip information */
 const sgl_block_dev_info_t sgl_w25q256_info = {
+    .name = "W25Q256",
     .sector_count = 8192,
     .sector_size = 4096,
     .block_size = 1,
@@ -123,6 +128,7 @@ const sgl_block_dev_info_t sgl_w25q256_info = {
 
 /* SDCARD chip information */
 const sgl_block_dev_info_t sdcard_info = {
+    .name             = "SD",
     .sector_size      = 512,
     .block_size       = 512,
     .erase_block_size = 512,

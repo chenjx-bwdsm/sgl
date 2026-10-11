@@ -41,6 +41,7 @@
 #define SGL_BLK_RES_PARERR          (4)        /* parity error */
 
 typedef struct sgl_block_dev_info {
+    const char *name;           /* device name */
     uint32_t sector_count;      /* total logical sectors */
     uint32_t sector_size;       /* bytes per sector */
     uint32_t block_size;        /* erase block size in sectors */

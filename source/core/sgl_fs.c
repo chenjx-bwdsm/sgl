@@ -147,6 +147,36 @@ const char* sgl_fs_mount_get_path(uint32_t index)
 }
 
 /**
+ * @brief Get the display name of the index-th device-backed mount point
+ *        Uses the block device's info name when available, otherwise falls
+ *        back to the mount point basename (leading '/' stripped).
+ * @param index 0 .. sgl_fs_mount_count()-1
+ * @return Device name, or NULL if out of range
+ */
+const char* sgl_fs_mount_get_name(uint32_t index)
+{
+    uint32_t i = 0;
+    sgl_mount_point_t *pos, *tmp;
+    sgl_list_for_each_entry_safe(pos, tmp, &g_mount_list, sgl_mount_point_t, node) {
+        if (!pos->dev) continue;
+        if (i++ != index) continue;
+
+        if (pos->dev->info && pos->dev->info->name)
+            return pos->dev->info->name;
+
+        /* Fallback: mount point without its leading '/'. A small static
+         * buffer is fine here since this is only used to label UI lists. */
+        static char name_buf[32];
+        const char *base = (pos->path && pos->path[0] == '/') ? pos->path + 1 : pos->path;
+        if (!base) return NULL;
+        strncpy(name_buf, base, sizeof(name_buf) - 1);
+        name_buf[sizeof(name_buf) - 1] = '\0';
+        return name_buf;
+    }
+    return NULL;
+}
+
+/**
  * @brief Find a device-backed mount point by name
  *        The lookup ignores a leading '/', so the bare device name ("sd")
  *        and the full mount point ("/sd") both match the same mount.

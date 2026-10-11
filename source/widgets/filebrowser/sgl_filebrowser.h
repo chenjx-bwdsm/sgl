@@ -74,10 +74,12 @@
  *   sgl_obj_t *filebrowser = sgl_filebrowser_create(NULL);
  *   sgl_obj_set_pos(filebrowser, 10, 30);
  *   sgl_obj_set_size(filebrowser, 240, 240);
- *   sgl_filebrowser_set_root(filebrowser, "/");
  *   sgl_filebrowser_set_text_font(filebrowser, &sgl_font_file);
  *   sgl_filebrowser_set_icons(filebrowser, filebrowser_icons);
- *   sgl_filebrowser_set_path_prefix(filebrowser, SGL_ICON_DISK " SD:");
+ *
+ *   The browser opens at the virtual "/" root, which lists every mounted
+ *   block device by name; clicking a device enters its file system, and
+ *   ".." at a device root returns to the device list.
  */
 #ifndef __SGL_FILEBROWSER_H__
 #define __SGL_FILEBROWSER_H__
@@ -148,8 +150,6 @@ typedef struct sgl_filebrowser {
     uint8_t icon_width;
     sgl_scroll_t sc;                   /**< shared scroll physics state (sgl_misc) */
     char current_path[SGL_FILEBROWSER_PATH_MAX_LEN];
-    char full_path[SGL_FILEBROWSER_PATH_MAX_LEN];
-    const char *path_prefix;
 } sgl_filebrowser_t;
 
 /**
@@ -158,13 +158,6 @@ typedef struct sgl_filebrowser {
  * @return file browser object
  */
 sgl_obj_t* sgl_filebrowser_create(sgl_obj_t *parent);
-
-/**
- * @brief Set the file browser object path.
- * @param obj: file browser object
- * @param path: path to set
- */
-void sgl_filebrowser_set_root(sgl_obj_t *obj, const char *path);
 
 /**
  * @brief Get the selected path of the file browser object.
@@ -291,14 +284,6 @@ void sgl_filebrowser_set_alpha(sgl_obj_t *obj, uint8_t alpha);
  * @return none
  */
 void sgl_filebrowser_set_border_width(sgl_obj_t *obj, uint8_t width);
-
-/**
- * @brief Set the path prefix of the file browser object.
- * @param obj: file browser object
- * @param prefix: path prefix to set
- * @return none
- */
-void sgl_filebrowser_set_path_prefix(sgl_obj_t *obj, const char *prefix);
 
 #ifdef __cplusplus
 }

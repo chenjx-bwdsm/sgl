@@ -219,6 +219,16 @@ int sgl_fs_mount_count(void);
 const char* sgl_fs_mount_get_path(uint32_t index);
 
 /**
+ * @brief Get the display name of the index-th device-backed mount point.
+ *        Returns the block device's info name (dev->info->name) when present,
+ *        otherwise falls back to the mount point path with its leading '/'
+ *        stripped, so "/sd" yields "sd".
+ * @param index 0 .. sgl_fs_mount_count()-1
+ * @return Device name, or NULL if out of range
+ */
+const char* sgl_fs_mount_get_name(uint32_t index);
+
+/**
  * @brief Find a device-backed mount point by name (leading '/' optional,
  *        so "sd" and "/sd" both match)
  * @param name Device name / mount point

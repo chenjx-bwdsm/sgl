@@ -583,6 +583,20 @@ void sgl_draw_chevron_up(sgl_surf_t *surf, sgl_area_t *area, int16_t x, int16_t 
 void sgl_draw_chevron_down(sgl_surf_t *surf, sgl_area_t *area, int16_t x, int16_t y, int16_t size, sgl_color_t color, uint8_t width, uint8_t alpha);
 
 /**
+ * @brief draw a cross (X) made of two diagonal lines
+ * @param surf surface
+ * @param area area that contains the cross
+ * @param x left edge of the cross bounding box
+ * @param y top edge of the cross bounding box
+ * @param size half size of the cross, it spans 2 * size + 1 px in both directions
+ * @param color cross color
+ * @param width line width
+ * @param alpha alpha of color
+ * @return none
+ */
+void sgl_draw_cross(sgl_surf_t *surf, sgl_area_t *area, int16_t x, int16_t y, int16_t size, sgl_color_t color, uint8_t width, uint8_t alpha);
+
+/**
  * @brief draw a line
  * @param surf surface
  * @param area area that contains the line
