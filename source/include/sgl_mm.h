@@ -26,6 +26,7 @@
 #define __SGL_MM_H__
 
 #include <sgl_core.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
