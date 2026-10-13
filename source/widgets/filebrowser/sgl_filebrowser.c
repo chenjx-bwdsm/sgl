@@ -34,8 +34,16 @@
 #include "sgl_filebrowser.h"
 
 #define SGL_FILEBROWSER_ITEM_PAD         (3)
-#define SGL_FILEBROWSER_ITEM_SPACE       (3)
+#define SGL_FILEBROWSER_ITEM_SPACE       (6)
 #define SGL_FILEBROWSER_PARENT_NAME      ".."
+
+/* rounded row card style, same scheme as sgl_menu / sgl_filedialog */
+#define SGL_FILEBROWSER_CARD_VMARGIN     (1)   /* gap between card and row edge  */
+#define SGL_FILEBROWSER_CARD_HPAD        (3)   /* card inset from the widget edge */
+#define SGL_FILEBROWSER_CARD_RADIUS      (4)   /* card corner radius             */
+#define SGL_FILEBROWSER_CARD_BORDER_W    (2)   /* selected card border width     */
+#define SGL_FILEBROWSER_LIST_TOP_PAD     (1)   /* extra top margin of the first row:
+                                               * part of the content, it scrolls away */
 
 static inline bool sgl_filebrowser_is_root(const sgl_filebrowser_t *fb)
 {
@@ -156,11 +164,11 @@ static void sgl_filebrowser_format_size(uint64_t bytes, char *out, size_t n)
 }
 
 /* Draw the free/total capacity of the device at mount index `mnt_idx`,
- * right-aligned to the row's right edge. No-op when capacity is unknown.
+ * right-aligned to `right_edge`. No-op when capacity is unknown.
  * Computed on the fly so no per-item buffer is needed. */
 static void sgl_filebrowser_draw_dev_capacity(sgl_filebrowser_t *fb, sgl_surf_t *surf,
-                                              sgl_obj_t *obj, sgl_area_t *list_area,
-                                              int item_pad, int16_t text_y, int16_t mnt_idx)
+                                              sgl_area_t *list_area,
+                                              int right_edge, int16_t text_y, int16_t mnt_idx)
 {
     const char *mp = sgl_fs_mount_get_path((uint32_t)mnt_idx);
     sgl_statvfs_t sv;
@@ -174,7 +182,7 @@ static void sgl_filebrowser_draw_dev_capacity(sgl_filebrowser_t *fb, sgl_surf_t 
     sgl_snprintf(cap, sizeof(cap), "%s/%s", as, ts);
 
     const int cap_w = (int)sgl_font_get_string_width(cap, fb->font);
-    const int16_t cap_x = (int16_t)(obj->coords.x2 - obj->border - item_pad - cap_w);
+    const int16_t cap_x = (int16_t)(right_edge - cap_w);
     sgl_draw_string(surf, list_area, cap_x, text_y,
                     cap, fb->item_text_color, fb->alpha, fb->font);
 }
@@ -470,17 +478,44 @@ static void sgl_filebrowser_load_dir(sgl_filebrowser_t *fb, const char *path)
     }
     fb->item_num = count;
 
-    if (count > 0) {
-        sgl_filebrowser_select_index(fb, 0);
-    }
+    /* no initial selection: the user picks a row first (same as sgl_filedialog) */
+}
+
+/* The path bar matches the *visible* card height (a row is one item tall, but
+ * the card is inset by CARD_VMARGIN top and bottom), so the bar and the list
+ * rows look equally tall. The list viewport spans the space below the bar,
+ * inside the widget border. */
+static inline int sgl_filebrowser_bar_height(int item_height)
+{
+    return item_height - 2 * SGL_FILEBROWSER_CARD_VMARGIN;
+}
+
+static void sgl_filebrowser_viewport(const sgl_obj_t *obj, int item_height,
+                                     int *out_y1, int *out_y2, int *out_h)
+{
+    const int y1 = obj->coords.y1 + obj->border + sgl_filebrowser_bar_height(item_height);
+    const int y2 = obj->coords.y2 - obj->border;
+
+    *out_y1 = y1;
+    *out_y2 = y2;
+    *out_h  = sgl_max(0, y2 - y1 + 1);
+}
+
+/* Height of the list viewport only (below the path bar, inside the border) */
+static int sgl_filebrowser_list_height(const sgl_obj_t *obj, int item_height)
+{
+    int list_y1, list_y2, list_h;
+    sgl_filebrowser_viewport(obj, item_height, &list_y1, &list_y2, &list_h);
+    SGL_UNUSED(list_y1);
+    SGL_UNUSED(list_y2);
+    return list_h;
 }
 
 static int32_t sgl_filebrowser_max_scroll(const sgl_filebrowser_t *fb, const sgl_obj_t *obj, int item_height)
 {
-    const int list_y1   = obj->coords.y1 + item_height; /* list starts below the path bar */
-    const int list_h    = obj->coords.y2 - list_y1 + 1;
-    const int content_h = (int)fb->item_num * item_height;
-    return sgl_max(0, content_h - list_h);
+    /* the content carries the first row's top margin, so it can scroll away */
+    const int content_h = SGL_FILEBROWSER_LIST_TOP_PAD + (int)fb->item_num * item_height;
+    return sgl_max(0, content_h - sgl_filebrowser_list_height(obj, item_height));
 }
 
 static void sgl_filebrowser_scroll_commit(sgl_scroll_t *sc)
@@ -494,10 +529,10 @@ static void sgl_filebrowser_scroll_commit(sgl_scroll_t *sc)
 static void sgl_filebrowser_ensure_selected_visible(sgl_filebrowser_t *fb, sgl_obj_t *obj, int item_height)
 {
     if (fb->item_selected < 0) return;
-    const int list_h       = obj->coords.y2 - (obj->coords.y1 + item_height) + 1;
-    const int selected_y   = fb->item_selected * item_height;
-    const int view_top     = (int)fb->sc.offset;
-    const int view_bottom  = view_top + list_h;
+    const int list_h         = sgl_filebrowser_list_height(obj, item_height);
+    const int selected_y     = SGL_FILEBROWSER_LIST_TOP_PAD + fb->item_selected * item_height;
+    const int view_top       = (int)fb->sc.offset;
+    const int view_bottom    = view_top + list_h;
     const int32_t max_scroll = sgl_filebrowser_max_scroll(fb, obj, item_height);
 
     if (selected_y < view_top) {
@@ -515,8 +550,9 @@ static void sgl_filebrowser_ensure_selected_visible(sgl_filebrowser_t *fb, sgl_o
 
 static void sgl_filebrowser_draw_path_bar(sgl_surf_t *surf, sgl_filebrowser_t *fb, sgl_obj_t *obj, int item_height)
 {
+    const int bar_h       = sgl_filebrowser_bar_height(item_height);
     const int16_t path_y1 = obj->coords.y1 + obj->border;
-    const int16_t path_y2 = path_y1 + item_height - 1;
+    const int16_t path_y2 = path_y1 + bar_h - 1;
 
     sgl_area_t path_area = {
         .x1 = obj->area.x1 + obj->border,   .y1 = path_y1,
@@ -527,28 +563,19 @@ static void sgl_filebrowser_draw_path_bar(sgl_surf_t *surf, sgl_filebrowser_t *f
         .x2 = obj->coords.x2 - obj->border, .y2 = path_y2 + obj->radius + obj->border,
     };
     sgl_draw_fill_rect(surf, &path_area, &path_rect, obj->radius, fb->path_color, fb->alpha);
-    sgl_draw_string(surf, &obj->area, path_rect.x1 + obj->radius + SGL_FILEBROWSER_ITEM_PAD, path_rect.y1 + SGL_FILEBROWSER_ITEM_PAD,
-                          fb->current_path, fb->item_text_color, fb->alpha, fb->font);
-}
-
-static void sgl_filebrowser_update_selection_area(sgl_obj_t *obj, int16_t item_y, int16_t item_height)
-{
-    sgl_area_t select = {
-        .x1 = obj->coords.x1 + obj->border,
-        .y1 = item_y - SGL_FILEBROWSER_ITEM_SPACE,
-        .x2 = obj->coords.x2 - obj->border,
-        .y2 = item_y - SGL_FILEBROWSER_ITEM_SPACE + item_height,
-    };
-    sgl_obj_update_area(&select);
+    sgl_draw_string(surf, &obj->area, path_rect.x1 + obj->radius + SGL_FILEBROWSER_ITEM_PAD,
+                    path_y1 + (bar_h - sgl_font_get_height(fb->font)) / 2,
+                    fb->current_path, fb->item_text_color, fb->alpha, fb->font);
 }
 
 static void sgl_filebrowser_visible_range(const sgl_filebrowser_t *fb, sgl_obj_t *obj, int item_height,
                                           int16_t *out_first, int16_t *out_last)
 {
-    const int list_y1 = obj->coords.y1 + item_height;
-    const int list_h  = obj->coords.y2 - list_y1 + 1;
+    const int list_h = sgl_filebrowser_list_height(obj, item_height);
 
-    int first = fb->sc.offset > 0 ? (int)(fb->sc.offset / item_height) : 0;
+    /* the first row starts below the top margin, so subtract it in content space */
+    int first = fb->sc.offset > SGL_FILEBROWSER_LIST_TOP_PAD
+                ? (int)((fb->sc.offset - SGL_FILEBROWSER_LIST_TOP_PAD) / item_height) : 0;
     if (first < 0) first = 0;
     if (first >= (int)fb->item_num) first = (int)fb->item_num - 1;
 
@@ -562,8 +589,7 @@ static void sgl_filebrowser_visible_range(const sgl_filebrowser_t *fb, sgl_obj_t
 
 static uint16_t sgl_filebrowser_target_capacity(const sgl_obj_t *obj, int item_height)
 {
-    const int list_y1 = obj->coords.y1 + item_height;
-    const int list_h  = obj->coords.y2 - list_y1 + 1;
+    const int list_h = sgl_filebrowser_list_height(obj, item_height);
     int visible_rows = (list_h + item_height - 1) / item_height + 1;
     if (visible_rows < 2) visible_rows = 2;
     int cap = visible_rows * SGL_FILEBROWSER_CACHE_MULT;
@@ -577,12 +603,22 @@ static void sgl_filebrowser_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_e
     sgl_filebrowser_t *fb = sgl_container_of(obj, sgl_filebrowser_t, obj);
 
     const int item_height = sgl_font_get_height(fb->font) + 2 * SGL_FILEBROWSER_ITEM_SPACE;
-    const int item_pad    = sgl_max(obj->radius, obj->border + SGL_FILEBROWSER_ITEM_PAD);
+    /* rounded row card geometry, same scheme as sgl_menu: the card radius is
+     * clamped to the card body between the row gaps */
+    int16_t card_radius = fb->card_radius;
+    const int card_hpad = fb->card_hpad;
     const int16_t icon_col_w = fb->icons != NULL
                                ? (fb->icon_width == 0 ? (int16_t)item_height : (int16_t)fb->icon_width)
                                : (int16_t)0;
-    const int16_t text_x  = obj->coords.x1 + item_pad + icon_col_w;
-    const int list_y1     = obj->coords.y1 + item_height;
+    /* row content starts where the card corner arc ends, as in sgl_menu */
+    const int16_t text_x = obj->coords.x1 + card_hpad + card_radius + icon_col_w;
+    /* the path bar matches the visible card height; the list spans the space
+     * between the bar and the bottom edge (inside the widget border) */
+    int list_y1, list_y2, list_h;
+    sgl_filebrowser_viewport(obj, item_height, &list_y1, &list_y2, &list_h);
+    /* the first row keeps an extra top margin: it is part of the content, so
+     * the list viewport itself is unchanged and the gap scrolls away */
+    const int16_t rows_y1 = (int16_t)(list_y1 + SGL_FILEBROWSER_LIST_TOP_PAD);
 
     sgl_area_t list_area = {
         .x1 = obj->area.x1,
@@ -612,10 +648,16 @@ static void sgl_filebrowser_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_e
             .x1 = obj->coords.x1,
             .y1 = (int16_t)list_y1,
             .x2 = obj->coords.x2,
-            .y2 = obj->coords.y2,
+            .y2 = (int16_t)list_y2,
         };
 
         if (fb->item_num == 0) {
+            const char *hint = sgl_filebrowser_is_root(fb) ? "No block device registered"
+                                                           : "Empty directory";
+            sgl_draw_string(surf, &list_area,
+                            obj->coords.x1 + card_hpad + card_radius,
+                            rows_y1 + SGL_FILEBROWSER_ITEM_SPACE,
+                            hint, fb->item_text_color, fb->alpha, fb->font);
             sgl_scroll_draw_bar(surf, obj, &fb->sc, max_scroll, &viewport, sgl_color_invert(fb->bg_color));
             break;
         }
@@ -633,8 +675,6 @@ static void sgl_filebrowser_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_e
             break;
         }
 
-        const int16_t list_y2 = obj->coords.y2 - obj->border;
-
         /* Iterate over the intersection of [first,last] and the current window. */
         int16_t draw_first = first;
         int16_t draw_last  = last;
@@ -643,33 +683,38 @@ static void sgl_filebrowser_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_e
             draw_last  = fb->cache_start_index + (int16_t)fb->cache_count - 1;
 
         for (int idx = draw_first; idx <= draw_last; ++idx) {
-            const int16_t text_y = list_y1 + SGL_FILEBROWSER_ITEM_SPACE
-                                 - (int16_t)fb->sc.offset + idx * item_height;
-            if (text_y > list_y2) break;
+            const int16_t row_y = rows_y1 - (int16_t)fb->sc.offset + idx * item_height;
+            if (row_y > list_y2) break;
+            if (row_y + item_height <= list_y1) continue;
 
             sgl_filebrowser_item_t *item = &fb->cache_items[idx - fb->cache_start_index];
 
+            /* every row is a rounded card (sgl_menu style), the selected one
+             * gets the accent border */
+            sgl_area_t card = {
+                .x1 = obj->coords.x1 + card_hpad,
+                .y1 = row_y + SGL_FILEBROWSER_CARD_VMARGIN,
+                .x2 = obj->coords.x2 - card_hpad,
+                .y2 = row_y + item_height - 1 - SGL_FILEBROWSER_CARD_VMARGIN,
+            };
             if (idx == fb->item_selected) {
-                sgl_area_t select = {
-                    .x1 = obj->coords.x1 + obj->border,
-                    .y1 = text_y - SGL_FILEBROWSER_ITEM_SPACE,
-                    .x2 = obj->coords.x2 - obj->border,
-                    .y2 = text_y - SGL_FILEBROWSER_ITEM_SPACE + item_height,
-                };
-                if (select.y2 >= (list_y2 - obj->radius)) {
-                    sgl_area_t select_coords = select;
-                    select_coords.y1 = select.y1 - item_height - obj->radius - 1;
-                    select_coords.y2 = list_y2;
-                    sgl_draw_fill_rect(surf, &select, &select_coords, obj->radius,
-                                       fb->item_selected_color, fb->alpha);
-                } else {
-                    sgl_draw_fill_rect(surf, &list_area, &select, 0,
-                                       fb->item_selected_color, fb->alpha);
-                }
+                sgl_draw_fill_rect(surf, &list_area, &card, card_radius,
+                                   fb->item_selected_color, fb->alpha);
+                sgl_draw_fill_rect_border(surf, &list_area, &card, card_radius,
+                                          fb->sel_border_color, fb->card_border_w,
+                                          fb->alpha);
+            }
+            else {
+                sgl_draw_fill_rect(surf, &list_area, &card, card_radius,
+                                   fb->card_color, fb->alpha);
+                sgl_draw_fill_rect_border(surf, &list_area, &card, card_radius,
+                                          fb->card_border_color, 1, fb->alpha);
             }
 
+            const int16_t text_y = row_y + SGL_FILEBROWSER_ITEM_SPACE;
+
             if (icon_col_w > 0 && item->icon != NULL) {
-                const int16_t icon_x = obj->coords.x1 + item_pad
+                const int16_t icon_x = obj->coords.x1 + card_hpad + card_radius
                                      + (icon_col_w - item->icon_w) / 2;
                 sgl_draw_string(surf, &list_area, icon_x, text_y,
                                 item->icon, fb->icon_color, fb->alpha, fb->font);
@@ -678,8 +723,9 @@ static void sgl_filebrowser_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_e
                             item->text, fb->item_text_color, fb->alpha, fb->font);
             /* Device list (root): append free/total capacity, right-aligned. */
             if (sgl_filebrowser_is_root(fb)) {
-                sgl_filebrowser_draw_dev_capacity(fb, surf, obj, &list_area,
-                                                  item_pad, text_y, idx);
+                sgl_filebrowser_draw_dev_capacity(fb, surf, &list_area,
+                                                  obj->coords.x2 - card_hpad - card_radius,
+                                                  text_y, idx);
             }
         }
 
@@ -690,7 +736,8 @@ static void sgl_filebrowser_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_e
     case SGL_EVENT_PRESSED:
         sgl_scroll_press(&fb->sc, evt->pos.y);
         sgl_scroll_bar_wake(&fb->sc);
-        if (evt->pos.x >= (obj->coords.x2 - item_height) && evt->pos.y <= (obj->coords.y1 + item_height)) {
+        if (evt->pos.x >= (obj->coords.x2 - sgl_filebrowser_bar_height(item_height)) &&
+            evt->pos.y <= (obj->coords.y1 + sgl_filebrowser_bar_height(item_height))) {
             sgl_obj_set_destroyed(obj);
         }
         break;
@@ -721,14 +768,14 @@ static void sgl_filebrowser_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_e
             clicked_index = fb->item_selected;
             if (clicked_index < 0 || clicked_index >= (int16_t)fb->item_num) break;
         } else {
-            const int16_t item_area_top = list_y1 + SGL_FILEBROWSER_ITEM_SPACE - (int16_t)fb->sc.offset;
+            /* rows are laid out from rows_y1, offset by the scroll position */
+            const int16_t item_area_top = (int16_t)(rows_y1 - (int16_t)fb->sc.offset);
             if (evt->pos.y < item_area_top) break;
 
             clicked_index = (int16_t)((evt->pos.y - item_area_top) / item_height);
             if (clicked_index < 0 || clicked_index >= (int16_t)fb->item_num) break;
         }
 
-        const int16_t old_selected = fb->item_selected;
         sgl_filebrowser_select_index(fb, clicked_index);
 
         if (fb->selected != NULL &&
@@ -773,38 +820,39 @@ static void sgl_filebrowser_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_e
             }
         }
         else {
+            /* regular file (or a device row): just keep the selection */
             fb->pending_dir_index = -1;
-            const int16_t item_y = list_y1 + SGL_FILEBROWSER_ITEM_SPACE
-                                 - (int16_t)fb->sc.offset + clicked_index * item_height;
-            if (old_selected >= 0) {
-                const int16_t old_item_y = list_y1 + SGL_FILEBROWSER_ITEM_SPACE
-                                         - (int16_t)fb->sc.offset + old_selected * item_height;
-                sgl_filebrowser_update_selection_area(obj, old_item_y, item_height);
-            }
-            sgl_filebrowser_update_selection_area(obj, item_y, item_height);
+            sgl_obj_set_dirty(obj);
         }
     }
     break;
 
-    case SGL_EVENT_KEY_DOWN:
-        if (fb->item_selected < (int16_t)fb->item_num - 1) {
-            sgl_filebrowser_select_index(fb, fb->item_selected + 1);
+    case SGL_EVENT_KEY_DOWN: {
+        /* with nothing selected yet, the first key press starts at the top */
+        const int16_t target = (fb->item_selected < 0)
+                               ? 0 : (int16_t)(fb->item_selected + 1);
+        if (target < (int16_t)fb->item_num && target != fb->item_selected) {
+            sgl_filebrowser_select_index(fb, target);
             sgl_scroll_anim_stop(&fb->sc);
             sgl_filebrowser_ensure_selected_visible(fb, obj, item_height);
             sgl_scroll_bar_wake(&fb->sc);
             sgl_obj_set_dirty(obj);
         }
-        break;
+    }
+    break;
 
-    case SGL_EVENT_KEY_UP:
-        if (fb->item_selected > 0) {
-            sgl_filebrowser_select_index(fb, fb->item_selected - 1);
+    case SGL_EVENT_KEY_UP: {
+        const int16_t target = (fb->item_selected < 0)
+                               ? 0 : (int16_t)(fb->item_selected - 1);
+        if (target >= 0 && target != fb->item_selected) {
+            sgl_filebrowser_select_index(fb, target);
             sgl_scroll_anim_stop(&fb->sc);
             sgl_filebrowser_ensure_selected_visible(fb, obj, item_height);
             sgl_scroll_bar_wake(&fb->sc);
             sgl_obj_set_dirty(obj);
         }
-        break;
+    }
+    break;
 
     case SGL_EVENT_DESTROYED:
         sgl_scroll_anim_stop(&fb->sc);
@@ -846,6 +894,13 @@ sgl_obj_t* sgl_filebrowser_create(sgl_obj_t *parent)
     fb->item_text_color      = SGL_THEME_TEXT_COLOR;
     fb->icon_color           = sgl_rgb(121, 177, 254);
     fb->path_color           = SGL_COLOR_WHEAT;
+    /* rounded row cards derived from the widget accent (same scheme as sgl_menu) */
+    fb->card_color           = sgl_color_mixer(fb->icon_color, fb->bg_color, 26);
+    fb->card_border_color    = sgl_color_mixer(fb->icon_color, fb->bg_color, 80);
+    fb->sel_border_color     = fb->icon_color;
+    fb->card_radius          = SGL_FILEBROWSER_CARD_RADIUS;
+    fb->card_border_w        = SGL_FILEBROWSER_CARD_BORDER_W;
+    fb->card_hpad            = SGL_FILEBROWSER_CARD_HPAD;
     fb->pending_dir_index    = -1;
     fb->item_selected        = -1;
     fb->cache_start_index    = -1;
@@ -1041,6 +1096,30 @@ void sgl_filebrowser_set_path_color(sgl_obj_t *obj, sgl_color_t color)
 {
     sgl_filebrowser_t *fb = sgl_container_of(obj, sgl_filebrowser_t, obj);
     fb->path_color = color;
+    sgl_obj_set_dirty(obj);
+}
+
+/**
+ * @brief Set the rounded card style of the list rows (sgl_menu-like cards)
+ */
+void sgl_filebrowser_set_card_style(sgl_obj_t *obj, sgl_color_t card_color, sgl_color_t card_border_color, int16_t radius)
+{
+    sgl_filebrowser_t *fb = sgl_container_of(obj, sgl_filebrowser_t, obj);
+    fb->card_color        = card_color;
+    fb->card_border_color = card_border_color;
+    fb->card_radius       = radius;
+    sgl_obj_set_dirty(obj);
+}
+
+/**
+ * @brief Set the selection highlight style of the rounded cards
+ */
+void sgl_filebrowser_set_sel_style(sgl_obj_t *obj, sgl_color_t sel_color, sgl_color_t sel_border_color, uint8_t border_width)
+{
+    sgl_filebrowser_t *fb = sgl_container_of(obj, sgl_filebrowser_t, obj);
+    fb->item_selected_color = sel_color;
+    fb->sel_border_color    = sel_border_color;
+    fb->card_border_w       = border_width;
     sgl_obj_set_dirty(obj);
 }
 

@@ -141,6 +141,9 @@ typedef struct sgl_filebrowser {
     const sgl_font_t   *font;
     sgl_color_t item_text_color;
     sgl_color_t item_selected_color;
+    sgl_color_t card_color;        /* idle row card background        */
+    sgl_color_t card_border_color; /* idle row card border            */
+    sgl_color_t sel_border_color;  /* selected row card border        */
     sgl_color_t bg_color;
     sgl_color_t border_color;
     sgl_color_t icon_color;
@@ -148,6 +151,9 @@ typedef struct sgl_filebrowser {
     const sgl_filebrowser_icon_t *icons;
     uint8_t alpha;
     uint8_t icon_width;
+    int16_t card_radius;
+    uint8_t card_border_w;
+    uint8_t card_hpad;
     sgl_scroll_t sc;                   /**< shared scroll physics state (sgl_misc) */
     char current_path[SGL_FILEBROWSER_PATH_MAX_LEN];
 } sgl_filebrowser_t;
@@ -204,6 +210,28 @@ void  sgl_filebrowser_set_radius(sgl_obj_t *obj, uint8_t radius);
  * @return none
  */
 void sgl_filebrowser_set_text_color(sgl_obj_t *obj, sgl_color_t color);
+
+/**
+ * @brief Set the rounded card style of the list rows (sgl_menu-like cards)
+ * @param obj: file browser object
+ * @param card_color: idle row card background color
+ * @param card_border_color: idle row card border color
+ * @param radius: card corner radius in pixels
+ * @return none
+ */
+void sgl_filebrowser_set_card_style(sgl_obj_t *obj, sgl_color_t card_color,
+                                    sgl_color_t card_border_color, int16_t radius);
+
+/**
+ * @brief Set the selection highlight style of the rounded cards
+ * @param obj: file browser object
+ * @param sel_color: selected card background color
+ * @param sel_border_color: selected card border color
+ * @param border_width: selected card border width in pixels
+ * @return none
+ */
+void sgl_filebrowser_set_sel_style(sgl_obj_t *obj, sgl_color_t sel_color,
+                                   sgl_color_t sel_border_color, uint8_t border_width);
 
 /**
  * @brief Set the icon color of the file browser object.
