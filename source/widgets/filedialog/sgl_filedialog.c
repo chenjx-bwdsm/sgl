@@ -34,9 +34,18 @@
 #include "sgl_filedialog.h"
 
 #define SGL_FILEDIALOG_ITEM_PAD        (3)
-#define SGL_FILEDIALOG_ITEM_SPACE      (3)
+#define SGL_FILEDIALOG_ITEM_SPACE      (6)
 #define SGL_FILEDIALOG_PARENT_NAME     ".."
 #define SGL_FILEDIALOG_OK_TEXT         "OK"
+#define SGL_FILEDIALOG_OK_MARGIN       (3)   /* OK pill inset inside the bottom bar */
+
+/* rounded row card style, same scheme as sgl_menu */
+#define SGL_FILEDIALOG_CARD_VMARGIN    (1)   /* gap between card and row edge  */
+#define SGL_FILEDIALOG_CARD_HPAD       (3)   /* card inset from the widget edge */
+#define SGL_FILEDIALOG_CARD_RADIUS     (4)   /* card corner radius             */
+#define SGL_FILEDIALOG_CARD_BORDER_W   (2)   /* selected card border width     */
+#define SGL_FILEDIALOG_LIST_TOP_PAD    (1)   /* extra top margin of the first row:
+                                              * part of the content, it scrolls away */
 
 static inline bool sgl_filedialog_is_valid_dir_entry(const char *name)
 {
@@ -148,11 +157,11 @@ static void sgl_filedialog_format_size(uint64_t bytes, char *out, size_t n)
 }
 
 /* Draw the free/total capacity of the device at mount index `mnt_idx`,
- * right-aligned to the row's right edge. No-op when capacity is unknown.
- * Computed on the fly so no per-item buffer is needed. */
+ * right-aligned to `right_edge` (the card's right inner edge). No-op when
+ * capacity is unknown. Computed on the fly so no per-item buffer is needed. */
 static void sgl_filedialog_draw_dev_capacity(sgl_filedialog_t *fd, sgl_surf_t *surf,
-                                             sgl_obj_t *obj, sgl_area_t *list_area,
-                                             int item_pad, int16_t text_y, int16_t mnt_idx)
+                                             sgl_area_t *list_area,
+                                             int right_edge, int16_t text_y, int16_t mnt_idx)
 {
     const char *mp = sgl_fs_mount_get_path((uint32_t)mnt_idx);
     sgl_statvfs_t sv;
@@ -166,7 +175,7 @@ static void sgl_filedialog_draw_dev_capacity(sgl_filedialog_t *fd, sgl_surf_t *s
     sgl_snprintf(cap, sizeof(cap), "%s/%s", as, ts);
 
     const int cap_w = (int)sgl_font_get_string_width(cap, fd->font);
-    const int16_t cap_x = (int16_t)(obj->coords.x2 - obj->border - item_pad - cap_w);
+    const int16_t cap_x = (int16_t)(right_edge - cap_w);
     sgl_draw_string(surf, list_area, cap_x, text_y,
                     cap, fd->item_text_color, fd->alpha, fd->font);
 }
@@ -463,10 +472,8 @@ static void sgl_filedialog_load_dir(sgl_filedialog_t *fd, const char *path)
         }
     }
     fd->item_num = count;
-
-    if (count > 0) {
-        sgl_filedialog_select_index(fd, 0);
-    }
+    /* nothing is selected up front: the list opens with no highlight and the
+     * first row is only selected once the user clicks it (or presses a key) */
 }
 
 /* ------------------------------------------------------------------------- */
@@ -525,7 +532,8 @@ static int32_t sgl_filedialog_max_scroll(const sgl_filedialog_t *fd, const sgl_o
                                          int item_height, int list_h)
 {
     SGL_UNUSED(obj);
-    const int content_h = (int)fd->item_num * item_height;
+    /* the content carries the first row's top margin, so it can scroll away */
+    const int content_h = SGL_FILEDIALOG_LIST_TOP_PAD + (int)fd->item_num * item_height;
     return sgl_max(0, content_h - list_h);
 }
 
@@ -540,7 +548,7 @@ static void sgl_filedialog_ensure_selected_visible(sgl_filedialog_t *fd, sgl_obj
                                                    int item_height, int list_h)
 {
     if (fd->item_selected < 0) return;
-    const int selected_y     = fd->item_selected * item_height;
+    const int selected_y     = SGL_FILEDIALOG_LIST_TOP_PAD + fd->item_selected * item_height;
     const int view_top       = (int)fd->sc.offset;
     const int view_bottom    = view_top + list_h;
     const int32_t max_scroll = sgl_filedialog_max_scroll(fd, obj, item_height, list_h);
@@ -561,7 +569,9 @@ static void sgl_filedialog_ensure_selected_visible(sgl_filedialog_t *fd, sgl_obj
 static void sgl_filedialog_visible_range(const sgl_filedialog_t *fd, int item_height, int list_h,
                                          int16_t *out_first, int16_t *out_last)
 {
-    int first = fd->sc.offset > 0 ? (int)(fd->sc.offset / item_height) : 0;
+    /* the first row starts below the top margin, so subtract it in content space */
+    int first = fd->sc.offset > SGL_FILEDIALOG_LIST_TOP_PAD
+                ? (int)((fd->sc.offset - SGL_FILEDIALOG_LIST_TOP_PAD) / item_height) : 0;
     if (first < 0) first = 0;
     if (first >= (int)fd->item_num) first = (int)fd->item_num - 1;
 
@@ -598,8 +608,8 @@ static void sgl_filedialog_ok_rect(const sgl_filedialog_t *fd, const sgl_obj_t *
     const int16_t bar_bot = (int16_t)(obj->coords.y2 - obj->border);
     const int bar_h = bar_bot - bar_top + 1;
 
-    /* Fill the bar minus a vertical margin, but never smaller than the text. */
-    int btn_h = bar_h - 2 * SGL_FILEDIALOG_ITEM_SPACE;
+    /* Fill the bar minus a small vertical margin, but never smaller than the text. */
+    int btn_h = bar_h - 2 * SGL_FILEDIALOG_OK_MARGIN;
     if (btn_h < font_h) btn_h = font_h;
     const int w = text_w + 2 * (btn_h / 2);
 
@@ -685,21 +695,33 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
 {
     sgl_filedialog_t *fd = sgl_container_of(obj, sgl_filedialog_t, obj);
 
-    const int item_height    = sgl_font_get_height(fd->font) + 2 * SGL_FILEDIALOG_ITEM_SPACE;
-    const int item_pad       = sgl_max(obj->radius, obj->border + SGL_FILEDIALOG_ITEM_PAD);
+    const int item_height = sgl_font_get_height(fd->font) + 2 * SGL_FILEDIALOG_ITEM_SPACE;
+    /* rounded row card geometry, same scheme as sgl_menu: the card radius is
+     * clamped to the card body between the row gaps */
+    int16_t card_radius = fd->card_radius;
+    const int card_hpad = fd->card_hpad;
     const int16_t icon_col_w = fd->icons != NULL
                                ? (fd->icon_width == 0 ? (int16_t)item_height : (int16_t)fd->icon_width)
                                : (int16_t)0;
-    const int16_t text_x = obj->coords.x1 + item_pad + icon_col_w;
-    const int list_y1    = obj->coords.y1 + item_height;          /* below the title bar */
-    const int list_y2    = obj->coords.y2 - item_height + 1;          /* above the bottom bar */
+    /* row content starts where the card corner arc ends, as in sgl_menu */
+    const int16_t text_x = obj->coords.x1 + card_hpad + card_radius + icon_col_w;
+    /* the top and bottom bars match the *visible* card height (a row is one
+     * item tall, but the card is inset by CARD_VMARGIN top and bottom), so
+     * bars and list rows look equally tall; the list spans the space between
+     * them (inside the widget border) */
+    const int bar_h      = item_height - 2 * SGL_FILEDIALOG_CARD_VMARGIN;
+    const int list_y1    = obj->coords.y1 + obj->border + bar_h; /* below the title bar */
+    const int list_y2    = obj->coords.y2 - obj->border - bar_h; /* above the bottom bar */
     const int list_h     = sgl_max(0, list_y2 - list_y1 + 1);
+    /* the first row keeps an extra top margin: it is part of the content, so
+     * the list viewport itself is unchanged and the gap scrolls away */
+    const int16_t rows_y1 = (int16_t)(list_y1 + SGL_FILEDIALOG_LIST_TOP_PAD);
 
     sgl_area_t list_area = {
         .x1 = obj->area.x1,
         .y1 = list_y1 + 1,
         .x2 = obj->area.x2,
-        .y2 = obj->area.y2 - obj->border - item_height,
+        .y2 = obj->area.y2 - obj->border - bar_h,
     };
 
     switch (evt->type) {
@@ -718,7 +740,7 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
         /* --- title bar: current path ("/" on the device list) --- */
         {
             const int16_t title_y1 = obj->coords.y1 + obj->border;
-            const int16_t title_y2 = title_y1 + item_height - 1;
+            const int16_t title_y2 = title_y1 + bar_h - 1;
             sgl_area_t title_area = {
                 .x1 = obj->area.x1 + obj->border,  .y1 = title_y1,
                 .x2 = obj->area.x2 - obj->border,  .y2 = title_y2,
@@ -732,15 +754,15 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
 
             sgl_draw_string(surf, &obj->area,
                             title_rect.x1 + obj->radius + SGL_FILEDIALOG_ITEM_PAD,
-                            title_rect.y1 + SGL_FILEDIALOG_ITEM_PAD,
+                            title_y1 + (bar_h - sgl_font_get_height(fd->font)) / 2,
                             fd->current_path, fd->item_text_color, fd->alpha, fd->font);
 
             /* close box at the right end of the title bar: draw an X (cross) */
             const int16_t cx2 = obj->coords.x2 - obj->border - SGL_FILEDIALOG_ITEM_PAD;
-            const int16_t cx1 = cx2 - item_height + 2 * SGL_FILEDIALOG_ITEM_PAD;
-            const int16_t ccx   = (int16_t)((cx1 + cx2) / 2);            /* box center x */
-            const int16_t ccy   = (int16_t)(title_y1 + item_height / 2); /* bar center y */
-            const int16_t csize = (int16_t)((item_height - 4 * SGL_FILEDIALOG_ITEM_PAD) / 2);
+            const int16_t cx1 = cx2 - bar_h + 2 * SGL_FILEDIALOG_ITEM_PAD;
+            const int16_t ccx   = (int16_t)((cx1 + cx2) / 2);        /* box center x */
+            const int16_t ccy   = (int16_t)(title_y1 + bar_h / 2);   /* bar center y */
+            const int16_t csize = (int16_t)((bar_h - 4 * SGL_FILEDIALOG_ITEM_PAD) / 2);
             sgl_draw_cross(surf, &obj->area, (int16_t)(ccx - csize), (int16_t)(ccy - csize),
                            csize, fd->item_text_color, 1, fd->alpha);
         }
@@ -763,7 +785,7 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
                 fd->selected->text[0] != '\0') {
                 sgl_draw_string(surf, &bar_area,
                                 bar_area.x1 + obj->radius + SGL_FILEDIALOG_ITEM_PAD,
-                                bar_y1 + SGL_FILEDIALOG_ITEM_SPACE,
+                                bar_y1 + (bar_h - sgl_font_get_height(fd->font)) / 2,
                                 fd->selected->text, fd->item_text_color, fd->alpha, fd->font);
             }
 
@@ -777,7 +799,7 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
                 const int th = sgl_font_get_height(fd->font);
                 sgl_draw_string(surf, &bar_area,
                                 ok_rect.x1 + (ok_rect.x2 - ok_rect.x1 - tw) / 2,
-                                ok_rect.y1 + (ok_rect.y2 - ok_rect.y1 - th) / 2,
+                                ok_rect.y1 + (ok_rect.y2 - ok_rect.y1 - th + 1) / 2,
                                 SGL_FILEDIALOG_OK_TEXT, fd->item_text_color, fd->alpha, fd->font);
             }
         }
@@ -792,8 +814,8 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
         if (fd->item_num == 0) {
             const char *hint = sgl_filedialog_is_root(fd) ? "No block device registered" : "Empty directory";
             sgl_draw_string(surf, &list_area,
-                            obj->coords.x1 + item_pad,
-                            list_y1 + SGL_FILEDIALOG_ITEM_SPACE,
+                            obj->coords.x1 + card_hpad + card_radius,
+                            rows_y1 + SGL_FILEDIALOG_ITEM_SPACE,
                             hint, fd->item_text_color, fd->alpha, fd->font);
             sgl_scroll_draw_bar(surf, obj, &fd->sc, max_scroll, &viewport,
                                 sgl_color_invert(fd->bg_color));
@@ -820,25 +842,38 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
             draw_last  = fd->cache_start_index + (int16_t)fd->cache_count - 1;
 
         for (int idx = draw_first; idx <= draw_last; ++idx) {
-            const int16_t text_y = list_y1 + SGL_FILEDIALOG_ITEM_SPACE
-                                 - (int16_t)fd->sc.offset + idx * item_height;
-            if (text_y > list_y2) break;
+            const int16_t row_y = rows_y1 - (int16_t)fd->sc.offset + idx * item_height;
+            if (row_y > list_y2) break;
+            if (row_y + item_height <= list_y1) continue;
 
             sgl_filebrowser_item_t *item = &fd->cache_items[idx - fd->cache_start_index];
 
+            /* every row is a rounded card (sgl_menu style), the selected one
+             * gets the accent border */
+            sgl_area_t card = {
+                .x1 = obj->coords.x1 + card_hpad,
+                .y1 = row_y + SGL_FILEDIALOG_CARD_VMARGIN,
+                .x2 = obj->coords.x2 - card_hpad,
+                .y2 = row_y + item_height - 1 - SGL_FILEDIALOG_CARD_VMARGIN,
+            };
             if (idx == fd->item_selected) {
-                sgl_area_t select = {
-                    .x1 = obj->coords.x1 + obj->border,
-                    .y1 = text_y - SGL_FILEDIALOG_ITEM_SPACE,
-                    .x2 = obj->coords.x2 - obj->border,
-                    .y2 = text_y - SGL_FILEDIALOG_ITEM_SPACE + item_height,
-                };
-                sgl_draw_fill_rect(surf, &list_area, &select, 0,
+                sgl_draw_fill_rect(surf, &list_area, &card, card_radius,
                                    fd->item_selected_color, fd->alpha);
+                sgl_draw_fill_rect_border(surf, &list_area, &card, card_radius,
+                                          fd->sel_border_color, fd->card_border_w,
+                                          fd->alpha);
+            }
+            else {
+                sgl_draw_fill_rect(surf, &list_area, &card, card_radius,
+                                   fd->card_color, fd->alpha);
+                sgl_draw_fill_rect_border(surf, &list_area, &card, card_radius,
+                                          fd->card_border_color, 1, fd->alpha);
             }
 
+            const int16_t text_y = row_y + SGL_FILEDIALOG_ITEM_SPACE;
+
             if (icon_col_w > 0 && item->icon != NULL) {
-                const int16_t icon_x = obj->coords.x1 + item_pad
+                const int16_t icon_x = obj->coords.x1 + card_hpad + card_radius
                                      + (icon_col_w - item->icon_w) / 2;
                 sgl_draw_string(surf, &list_area, icon_x, text_y,
                                 item->icon, fd->icon_color, fd->alpha, fd->font);
@@ -855,8 +890,9 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
 
             /* device list (root): append free/total capacity, right-aligned */
             if (sgl_filedialog_is_root(fd)) {
-                sgl_filedialog_draw_dev_capacity(fd, surf, obj, &list_area,
-                                                 item_pad, text_y, idx);
+                sgl_filedialog_draw_dev_capacity(fd, surf, &list_area,
+                                                 obj->coords.x2 - card_hpad - card_radius,
+                                                 text_y, idx);
             }
         }
 
@@ -898,8 +934,8 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
         }
 
         /* close box on the title bar */
-        if (evt->pos.y <= (obj->coords.y1 + item_height) &&
-            evt->pos.x >= (obj->coords.x2 - obj->border - item_height)) {
+        if (evt->pos.y <= (obj->coords.y1 + bar_h) &&
+            evt->pos.x >= (obj->coords.x2 - obj->border - bar_h)) {
             sgl_filedialog_finish(fd, NULL);
             break;
         }
@@ -912,9 +948,10 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
             break;
         }
 
-        /* entry rows */
+        /* entry rows: map the touch y to the row it lands on (rows are laid
+         * out from rows_y1, offset by the scroll position) */
         if (evt->pos.y <= list_y1 || evt->pos.y > list_y2) break;
-        const int16_t item_area_top = list_y1 + SGL_FILEDIALOG_ITEM_SPACE - (int16_t)fd->sc.offset;
+        const int16_t item_area_top = (int16_t)(rows_y1 - (int16_t)fd->sc.offset);
         if (evt->pos.y < item_area_top) break;
 
         int16_t clicked_index = (int16_t)((evt->pos.y - item_area_top) / item_height);
@@ -922,25 +959,32 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
     }
     break;
 
-    case SGL_EVENT_KEY_DOWN:
-        if (fd->item_selected < (int16_t)fd->item_num - 1) {
-            sgl_filedialog_select_index(fd, fd->item_selected + 1);
+    case SGL_EVENT_KEY_DOWN: {
+        /* with nothing selected yet, the first key press starts at the top */
+        const int16_t target = (fd->item_selected < 0)
+                               ? 0 : (int16_t)(fd->item_selected + 1);
+        if (target < (int16_t)fd->item_num && target != fd->item_selected) {
+            sgl_filedialog_select_index(fd, target);
             sgl_scroll_anim_stop(&fd->sc);
             sgl_filedialog_ensure_selected_visible(fd, obj, item_height, list_h);
             sgl_scroll_bar_wake(&fd->sc);
             sgl_obj_set_dirty(obj);
         }
-        break;
+    }
+    break;
 
-    case SGL_EVENT_KEY_UP:
-        if (fd->item_selected > 0) {
-            sgl_filedialog_select_index(fd, fd->item_selected - 1);
+    case SGL_EVENT_KEY_UP: {
+        const int16_t target = (fd->item_selected < 0)
+                               ? 0 : (int16_t)(fd->item_selected - 1);
+        if (target >= 0 && target != fd->item_selected) {
+            sgl_filedialog_select_index(fd, target);
             sgl_scroll_anim_stop(&fd->sc);
             sgl_filedialog_ensure_selected_visible(fd, obj, item_height, list_h);
             sgl_scroll_bar_wake(&fd->sc);
             sgl_obj_set_dirty(obj);
         }
-        break;
+    }
+    break;
 
     case SGL_EVENT_KEY_ESC:
         sgl_filedialog_finish(fd, NULL);
@@ -988,6 +1032,13 @@ static sgl_obj_t *sgl_filedialog_create(sgl_obj_t *parent, const char *dev_name,
     fd->path_color          = SGL_COLOR_WHEAT;
     fd->btn_color           = sgl_rgb(86, 156, 214);
     fd->btn_disabled_color  = sgl_color_mixer(SGL_THEME_COLOR, SGL_THEME_TEXT_COLOR, 64);
+    /* rounded row cards derived from the dialog accent (same scheme as sgl_menu) */
+    fd->card_color          = sgl_color_mixer(fd->btn_color, fd->bg_color, 26);
+    fd->card_border_color   = sgl_color_mixer(fd->btn_color, fd->bg_color, 80);
+    fd->sel_border_color    = fd->btn_color;
+    fd->card_radius         = SGL_FILEDIALOG_CARD_RADIUS;
+    fd->card_border_w       = SGL_FILEDIALOG_CARD_BORDER_W;
+    fd->card_hpad           = SGL_FILEDIALOG_CARD_HPAD;
     fd->item_selected       = -1;
     fd->cache_start_index   = -1;
     fd->dir_handle          = -1;
@@ -1105,5 +1156,29 @@ void sgl_filedialog_set_text_color(sgl_obj_t *obj, sgl_color_t color)
 {
     sgl_filedialog_t *fd = sgl_container_of(obj, sgl_filedialog_t, obj);
     fd->item_text_color = color;
+    sgl_obj_set_dirty(obj);
+}
+
+/**
+ * @brief Set the rounded card style of the list rows (sgl_menu-like cards)
+ */
+void sgl_filedialog_set_card_style(sgl_obj_t *obj, sgl_color_t card_color, sgl_color_t card_border_color, int16_t radius)
+{
+    sgl_filedialog_t *fd = sgl_container_of(obj, sgl_filedialog_t, obj);
+    fd->card_color        = card_color;
+    fd->card_border_color = card_border_color;
+    fd->card_radius       = radius;
+    sgl_obj_set_dirty(obj);
+}
+
+/**
+ * @brief Set the selection highlight style of the rounded cards
+ */
+void sgl_filedialog_set_sel_style(sgl_obj_t *obj, sgl_color_t sel_color, sgl_color_t sel_border_color, uint8_t border_width)
+{
+    sgl_filedialog_t *fd = sgl_container_of(obj, sgl_filedialog_t, obj);
+    fd->item_selected_color = sel_color;
+    fd->sel_border_color    = sel_border_color;
+    fd->card_border_w       = border_width;
     sgl_obj_set_dirty(obj);
 }
