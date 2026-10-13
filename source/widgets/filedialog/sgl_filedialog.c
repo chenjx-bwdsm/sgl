@@ -91,6 +91,10 @@ static const char *sgl_filedialog_match_icon(const sgl_filedialog_t *fd,
 {
     if (fd->icons == NULL || item == NULL) return NULL;
 
+    /* The virtual "/" root lists block devices, not files: its rows are plain
+     * device names, so no icon is matched (and none is drawn) for them. */
+    if (sgl_filedialog_is_root(fd)) return NULL;
+
     const char *default_icon = NULL;
     const char *dir_icon     = NULL;
     const char *parent_icon  = NULL;
@@ -127,13 +131,76 @@ static const char *sgl_filedialog_match_icon(const sgl_filedialog_t *fd,
     return default_icon;
 }
 
+/* Font used to render the list icons: a dedicated icon font when one is set
+ * (sgl_filedialog_set_icon_font), otherwise the widget text font. */
+static inline const sgl_font_t *sgl_filedialog_icon_font(const sgl_filedialog_t *fd)
+{
+    return fd->icon_font != NULL ? fd->icon_font : fd->font;
+}
+
+/* Decode the leading UTF-8 codepoint of an icon string. Icons are single
+ * characters (e.g. the SGL_ICON_* font glyphs), so only the first one matters. */
+static uint32_t sgl_filedialog_icon_unicode(const char *icon)
+{
+    const uint8_t c = (uint8_t)icon[0];
+    uint32_t u;
+    int n, i;
+
+    if (c < 0x80) return c;
+    if ((c & 0xE0) == 0xC0)      { u = c & 0x1Fu; n = 1; }
+    else if ((c & 0xF0) == 0xE0) { u = c & 0x0Fu; n = 2; }
+    else if ((c & 0xF8) == 0xF0) { u = c & 0x07u; n = 3; }
+    else return c;
+
+    for (i = 1; i <= n && icon[i] != '\0'; ++i)
+        u = (u << 6) | ((uint8_t)icon[i] & 0x3Fu);
+    return u;
+}
+
+static void sgl_filedialog_draw_icon(sgl_filedialog_t *fd, sgl_surf_t *surf,
+                                     sgl_area_t *area, int16_t x,
+                                     int16_t card_y1, int16_t card_h,
+                                     const char *icon)
+{
+    const sgl_font_t *ifont = sgl_filedialog_icon_font(fd);
+    int16_t y = (int16_t)(card_y1 + (card_h - sgl_font_get_height(ifont)) / 2);
+
+    if (ifont->table != NULL) {
+        uint32_t idx = sgl_search_unicode_ch_index(ifont,
+                                                   sgl_filedialog_icon_unicode(icon));
+        if (idx != 0) {
+            const sgl_font_table_t *dsc = &ifont->table[idx];
+            y = (int16_t)(card_y1 + (card_h - dsc->box_h) / 2
+                          + dsc->box_h + dsc->ofs_y + ifont->base_line
+                          - ifont->font_height);
+        }
+    }
+    sgl_draw_string(surf, area, x, y, icon, fd->icon_color, fd->alpha, ifont);
+}
+
 static void sgl_filedialog_resolve_item_icon(sgl_filedialog_t *fd,
                                              sgl_filebrowser_item_t *item)
 {
     item->icon   = sgl_filedialog_match_icon(fd, item);
     item->icon_w = (item->icon != NULL)
-                   ? (int16_t)sgl_font_get_string_width(item->icon, fd->font)
+                   ? (int16_t)sgl_font_get_string_width(item->icon,
+                                                        sgl_filedialog_icon_font(fd))
                    : (int16_t)0;
+}
+
+/* Recompute the cached icon widths, e.g. after the text or icon font changed */
+static void sgl_filedialog_refresh_icon_widths(sgl_filedialog_t *fd)
+{
+    const sgl_font_t *ifont = sgl_filedialog_icon_font(fd);
+
+    for (uint16_t i = 0; i < fd->cache_count; ++i) {
+        sgl_filebrowser_item_t *it = &fd->cache_items[i];
+        if (it->icon != NULL)
+            it->icon_w = (int16_t)sgl_font_get_string_width(it->icon, ifont);
+    }
+    if (fd->selected_item.icon != NULL)
+        fd->selected_item.icon_w =
+            (int16_t)sgl_font_get_string_width(fd->selected_item.icon, ifont);
 }
 
 /* Format a byte count into a compact human string, e.g. 10485760 -> "10.0M",
@@ -234,6 +301,8 @@ static int sgl_filedialog_read_next(sgl_filedialog_t *fd,
     if (sgl_filedialog_is_root(fd)) {
         int cnt = sgl_fs_mount_count();
         if (fd->dir_cursor >= cnt) return 0;
+        /* The row label is the block device's info->name; the mount point
+         * basename is only the fallback for devices without info. */
         const char *nm = sgl_fs_mount_get_name((uint32_t)fd->dir_cursor);
         sgl_snprintf(name, name_size, "%s", nm ? nm : "?");
         *type = SGL_S_IFDIR;
@@ -700,7 +769,8 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
      * clamped to the card body between the row gaps */
     int16_t card_radius = fd->card_radius;
     const int card_hpad = fd->card_hpad;
-    const int16_t icon_col_w = fd->icons != NULL
+    /* no icon column at the "/" root: the device rows have no icons */
+    const int16_t icon_col_w = (fd->icons != NULL && !sgl_filedialog_is_root(fd))
                                ? (fd->icon_width == 0 ? (int16_t)item_height : (int16_t)fd->icon_width)
                                : (int16_t)0;
     /* row content starts where the card corner arc ends, as in sgl_menu */
@@ -873,10 +943,13 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
             const int16_t text_y = row_y + SGL_FILEDIALOG_ITEM_SPACE;
 
             if (icon_col_w > 0 && item->icon != NULL) {
-                const int16_t icon_x = obj->coords.x1 + card_hpad + card_radius
-                                     + (icon_col_w - item->icon_w) / 2;
-                sgl_draw_string(surf, &list_area, icon_x, text_y,
-                                item->icon, fd->icon_color, fd->alpha, fd->font);
+                /* center the icon between the card left edge and the text */
+                const int16_t icon_x = obj->coords.x1 + card_hpad
+                                     + (card_radius + icon_col_w - item->icon_w) / 2;
+                sgl_filedialog_draw_icon(fd, surf, &list_area, icon_x,
+                                         (int16_t)(row_y + SGL_FILEDIALOG_CARD_VMARGIN),
+                                         (int16_t)(item_height - 2 * SGL_FILEDIALOG_CARD_VMARGIN),
+                                         item->icon);
             }
 
             /* in open-dir mode regular files are visible but dimmed */
@@ -1023,6 +1096,7 @@ static sgl_obj_t *sgl_filedialog_create(sgl_obj_t *parent, const char *dev_name,
     fd->mode                = mode;
     fd->selected            = &fd->selected_item;
     fd->font                = sgl_get_system_font();
+    fd->icon_font           = NULL;   /* NULL = draw icons with the text font */
     fd->alpha               = SGL_THEME_ALPHA;
     fd->bg_color            = SGL_THEME_COLOR;
     fd->item_selected_color = sgl_color_mixer(SGL_THEME_COLOR, SGL_THEME_BORDER_COLOR, 128);
@@ -1103,14 +1177,25 @@ void sgl_filedialog_set_text_font(sgl_obj_t *obj, const sgl_font_t *font)
 {
     sgl_filedialog_t *fd = sgl_container_of(obj, sgl_filedialog_t, obj);
     fd->font = font;
-    if (fd->cache_items != NULL) {
-        for (uint16_t i = 0; i < fd->cache_count; ++i) {
-            sgl_filebrowser_item_t *it = &fd->cache_items[i];
-            it->icon_w = (it->icon != NULL)
-                         ? (int16_t)sgl_font_get_string_width(it->icon, fd->font)
-                         : (int16_t)0;
-        }
-    }
+    /* Icon widths depend on the font actually used to draw them. */
+    sgl_filedialog_refresh_icon_widths(fd);
+    sgl_obj_set_dirty(obj);
+}
+
+/**
+ * @brief Set the icon font of the dialog
+ * @param obj: file dialog object
+ * @param font: font used to draw the list icons, NULL = use the text font
+ * @note the icon glyphs must live in @font, e.g. the FontAwesome icon font
+ *       sgl_icon_fontawesome14; icons are vertically centered in the row card
+ */
+void sgl_filedialog_set_icon_font(sgl_obj_t *obj, const sgl_font_t *font)
+{
+    sgl_filedialog_t *fd = sgl_container_of(obj, sgl_filedialog_t, obj);
+    if (fd->icon_font == font) return;
+
+    fd->icon_font = font;
+    sgl_filedialog_refresh_icon_widths(fd);
     sgl_obj_set_dirty(obj);
 }
 
@@ -1125,6 +1210,9 @@ void sgl_filedialog_set_icons(sgl_obj_t *obj, const sgl_filebrowser_icon_t *icon
         for (uint16_t i = 0; i < fd->cache_count; ++i) {
             sgl_filedialog_resolve_item_icon(fd, &fd->cache_items[i]);
         }
+    }
+    if (fd->selected_item.text[0] != '\0') {
+        sgl_filedialog_resolve_item_icon(fd, &fd->selected_item);
     }
     sgl_obj_set_dirty(obj);
 }

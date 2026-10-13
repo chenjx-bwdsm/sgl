@@ -62,3 +62,10 @@ if(CONFIG_SGL_FONT_CONSOLAS24_COMPRESS)
         ${CMAKE_CURRENT_LIST_DIR}/sgl_ascii_consolas24_compress.c
     )
 endif()
+
+if(CONFIG_SGL_FONT_SGL_ICON_FONTAWESOME14)
+    set(SGL_SOURCE
+        ${SGL_SOURCE}
+        ${CMAKE_CURRENT_LIST_DIR}/sgl_icon_fontawesome14.c
+    )
+endif()

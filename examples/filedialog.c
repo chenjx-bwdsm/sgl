@@ -10,11 +10,18 @@
 #include <stdio.h>
 #include <string.h>
 
-/* ramfs ignores the block device internals, but mounting with a non-NULL
- * device registers the mount point in the block device registry, which is
- * exactly what the file dialog enumerates */
-static sgl_block_dev_t g_filedialog_dev_sd;
-static sgl_block_dev_t g_filedialog_dev_flash;
+/* Simulated block devices. ramfs ignores the block device internals, but
+ * mounting with a non-NULL device registers the mount point in the block
+ * device registry, which is exactly what the file dialog enumerates.
+ *
+ * The dialog's device list shows info->name (not the mount point), so the
+ * label can differ from the "/sd" / "/flash" mount paths -- useful when the
+ * mount point is an internal path while the device has a product name. */
+static const sgl_block_dev_info_t g_filedialog_sd_info    = { .name = "SD Card" };
+static const sgl_block_dev_info_t g_filedialog_flash_info = { .name = "Flash" };
+
+static sgl_block_dev_t g_filedialog_dev_sd    = { .info = &g_filedialog_sd_info };
+static sgl_block_dev_t g_filedialog_dev_flash = { .info = &g_filedialog_flash_info };
 
 static sgl_obj_t *g_filedialog_status;
 static char g_filedialog_status_text[160];
@@ -53,6 +60,51 @@ static void sgl_filedialog_example_confirm(sgl_obj_t *dialog, const char *path, 
     }
 }
 
+/* Row icons: the pattern -> glyph pairs, using the SGL_ICON_* strings that the
+ * file browser / file dialog headers provide (FontAwesome codepoints). The
+ * glyphs come from the icon font sgl_icon_fontawesome14, generated from
+ * fonts/FontAwesome.otf with the sgl_font_conv tool. */
+static const sgl_filebrowser_icon_t g_filedialog_icons[] = {
+    { "*",     SGL_ICON_NORMAL_FILE },
+    { "..",    SGL_ICON_RETURN_FILE },
+    { "dir",   SGL_ICON_DIR_FILE },
+    { ".txt",  SGL_ICON_TEXT_FILE },
+    { ".ini",  SGL_ICON_TEXT_FILE },
+    { ".cfg",  SGL_ICON_TEXT_FILE },
+    { ".log",  SGL_ICON_TEXT_FILE },
+    { ".pdf",  SGL_ICON_PDF_FILE },
+    { ".doc",  SGL_ICON_WORD_FILE },
+    { ".docx", SGL_ICON_WORD_FILE },
+    { ".xls",  SGL_ICON_EXCEL_FILE },
+    { ".xlsx", SGL_ICON_EXCEL_FILE },
+    { ".ppt",  SGL_ICON_PPT_FILE },
+    { ".pptx", SGL_ICON_PPT_FILE },
+    { ".png",  SGL_ICON_IMAGE_FILE },
+    { ".jpg",  SGL_ICON_IMAGE_FILE },
+    { ".jpeg", SGL_ICON_IMAGE_FILE },
+    { ".bmp",  SGL_ICON_IMAGE_FILE },
+    { ".zip",  SGL_ICON_ZIP_FILE },
+    { ".rar",  SGL_ICON_ZIP_FILE },
+    { ".7z",   SGL_ICON_ZIP_FILE },
+    { ".mp3",  SGL_ICON_MUSIC_FILE },
+    { ".wav",  SGL_ICON_MUSIC_FILE },
+    { ".mp4",  SGL_ICON_VIDEO_FILE },
+    { ".avi",  SGL_ICON_VIDEO_FILE },
+    { ".c",    SGL_ICON_CPP_FILE },
+    { ".h",    SGL_ICON_CPP_FILE },
+    { ".cpp",  SGL_ICON_CPP_FILE },
+    { NULL,    NULL },
+};
+
+/* Text font + FontAwesome icon font + icon table for a freshly opened dialog */
+static void sgl_filedialog_example_setup(sgl_obj_t *dlg)
+{
+    sgl_filedialog_set_text_font(dlg, &consolas14);
+    sgl_filedialog_set_icon_font(dlg, &sgl_icon_fontawesome14);
+    sgl_filedialog_set_icons(dlg, g_filedialog_icons);
+    sgl_filedialog_set_confirm_cb(dlg, sgl_filedialog_example_confirm, NULL);
+}
+
 static void sgl_filedialog_example_open_file_cb(sgl_event_t *event)
 {
     if (event->type != SGL_EVENT_CLICKED) return;
@@ -63,8 +115,7 @@ static void sgl_filedialog_example_open_file_cb(sgl_event_t *event)
         sgl_filedialog_example_status("dialog alloc failed");
         return;
     }
-    sgl_filedialog_set_text_font(dlg, &consolas14);
-    sgl_filedialog_set_confirm_cb(dlg, sgl_filedialog_example_confirm, NULL);
+    sgl_filedialog_example_setup(dlg);
 }
 
 static void sgl_filedialog_example_open_dir_cb(sgl_event_t *event)
@@ -76,8 +127,7 @@ static void sgl_filedialog_example_open_dir_cb(sgl_event_t *event)
         sgl_filedialog_example_status("dialog alloc failed");
         return;
     }
-    sgl_filedialog_set_text_font(dlg, &consolas14);
-    sgl_filedialog_set_confirm_cb(dlg, sgl_filedialog_example_confirm, NULL);
+    sgl_filedialog_example_setup(dlg);
 }
 
 static void sgl_filedialog_example_open_sd_cb(sgl_event_t *event)
@@ -90,8 +140,7 @@ static void sgl_filedialog_example_open_sd_cb(sgl_event_t *event)
         sgl_filedialog_example_status("dialog alloc failed");
         return;
     }
-    sgl_filedialog_set_text_font(dlg, &consolas14);
-    sgl_filedialog_set_confirm_cb(dlg, sgl_filedialog_example_confirm, NULL);
+    sgl_filedialog_example_setup(dlg);
 }
 
 void sgl_filedialog_examples(sgl_obj_t *parent)

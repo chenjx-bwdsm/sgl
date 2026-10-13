@@ -67,6 +67,12 @@ extern const sgl_font_t kai33;
 extern const sgl_font_t consolas24_compress;
 #endif
 
+/* Font Awesome icon font, 14px, generated from fonts/FontAwesome.otf.
+ * Used as a separate icon font by the file browser / file dialog list. */
+#if CONFIG_SGL_FONT_SGL_ICON_FONTAWESOME14
+extern const sgl_font_t sgl_icon_fontawesome14;
+#endif
+
 /* External flash font support (CONFIG_SGL_FLASH_FONT)
  *
  * Reference LVGL binfont: keep font table/unicode in code (internal flash),

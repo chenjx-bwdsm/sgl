@@ -23,25 +23,13 @@
  */
 
 /**
- *   For example, to create a file browser control with custom icons for different file types:
+ *   For example, to create a file browser control with icons for different
+ *   file types. The SGL_ICON_* strings below are predefined by this header
+ *   (FontAwesome codepoints, drawn with the icon font), so there is no need
+ *   to define them again:
  *
- *   #define SGL_ICON_NORNAL_FILE          "\xef\x80\x96"  // unicode 0XF016
- *   #define SGL_ICON_RETURN_FILE          "\xef\x84\x92"  // unicode 0XF112
- *   #define SGL_ICON_TEXT_FILE            "\xef\x83\xb6"  // unicode 0XF0F6
- *   #define SGL_ICON_DIR_FILE             "\xef\x81\xbc"  // unicode 0XF07C
- *   #define SGL_ICON_PDF_FILE             "\xef\x87\x81"  // unicode 0XF1C1
- *   #define SGL_ICON_WORD_FILE            "\xef\x87\x82"  // unicode 0XF1C2
- *   #define SGL_ICON_EXCEL_FILE           "\xef\x87\x83"  // unicode 0XF1C3
- *   #define SGL_ICON_PPT_FILE             "\xef\x87\x84"  // unicode 0XF1C4
- *   #define SGL_ICON_IMAGE_FILE           "\xef\x87\x85"  // unicode 0XF1C5
- *   #define SGL_ICON_ZIP_FILE             "\xef\x87\x86"  // unicode 0XF1C6
- *   #define SGL_ICON_MUSIC_FILE           "\xef\x87\x87"  // unicode 0XF1C7
- *   #define SGL_ICON_VIDEO_FILE           "\xef\x87\x88"  // unicode 0XF1C8
- *   #define SGL_ICON_CPP_FILE             "\xef\x87\x89"  // unicode 0XF1C9
- *   #define SGL_ICON_DISK                 "\xef\x9f\x82"  // unicode 0XF7C2
-
  *   static sgl_filebrowser_icon_t filebrowser_icons[] = {
- *       { "*", SGL_ICON_NORNAL_FILE },
+ *       { "*", SGL_ICON_NORMAL_FILE },
  *       { "..", SGL_ICON_RETURN_FILE },
  *       { "dir", SGL_ICON_DIR_FILE },
  *       { ".txt", SGL_ICON_TEXT_FILE },
@@ -74,7 +62,8 @@
  *   sgl_obj_t *filebrowser = sgl_filebrowser_create(NULL);
  *   sgl_obj_set_pos(filebrowser, 10, 30);
  *   sgl_obj_set_size(filebrowser, 240, 240);
- *   sgl_filebrowser_set_text_font(filebrowser, &sgl_font_file);
+ *   sgl_filebrowser_set_text_font(filebrowser, &consolas14);
+ *   sgl_filebrowser_set_icon_font(filebrowser, &sgl_icon_fontawesome14);
  *   sgl_filebrowser_set_icons(filebrowser, filebrowser_icons);
  *
  *   The browser opens at the virtual "/" root, which lists every mounted
@@ -111,6 +100,67 @@ typedef struct sgl_filebrowser_icon {
     const char *icon;
 } sgl_filebrowser_icon_t;
 
+/* Ready-made icon strings for the list rows: FontAwesome free-solid codepoints
+ * (UTF-8 byte escapes, no escape sequences are interpreted by the compiler).
+ * They are meant to be drawn with an icon font such as sgl_icon_fontawesome14,
+ * generated from fonts/FontAwesome.otf - see the generator tool
+ * sgl_font_conv_cli. Using another icon font? Redefine them before including
+ * this header (each one is guarded by #ifndef). */
+#ifndef SGL_ICON_NORMAL_FILE
+#define SGL_ICON_NORMAL_FILE   "\xef\x80\x96"   /* U+F016 file            */
+#endif
+#ifndef SGL_ICON_RETURN_FILE
+#define SGL_ICON_RETURN_FILE   "\xef\x84\x92"   /* U+F112 reply ("..")    */
+#endif
+#ifndef SGL_ICON_TEXT_FILE
+#define SGL_ICON_TEXT_FILE     "\xef\x85\x9c"   /* U+F15C file-lines      */
+#endif
+#ifndef SGL_ICON_DIR_FILE
+#define SGL_ICON_DIR_FILE      "\xef\x81\xbc"   /* U+F07C folder-open     */
+#endif
+#ifndef SGL_ICON_DIR
+#define SGL_ICON_DIR           "\xef\x81\xbb"   /* U+F07B folder          */
+#endif
+#ifndef SGL_ICON_DISK
+#define SGL_ICON_DISK          "\xef\x82\xa0"   /* U+F0A0 hard-drive      */
+#endif
+#ifndef SGL_ICON_PDF_FILE
+#define SGL_ICON_PDF_FILE      "\xef\x87\x81"   /* U+F1C1 file-pdf        */
+#endif
+#ifndef SGL_ICON_WORD_FILE
+#define SGL_ICON_WORD_FILE     "\xef\x87\x82"   /* U+F1C2 file-word       */
+#endif
+#ifndef SGL_ICON_EXCEL_FILE
+#define SGL_ICON_EXCEL_FILE    "\xef\x87\x83"   /* U+F1C3 file-excel      */
+#endif
+#ifndef SGL_ICON_PPT_FILE
+#define SGL_ICON_PPT_FILE      "\xef\x87\x84"   /* U+F1C4 file-powerpoint */
+#endif
+#ifndef SGL_ICON_IMAGE_FILE
+#define SGL_ICON_IMAGE_FILE    "\xef\x87\x85"   /* U+F1C5 file-image      */
+#endif
+#ifndef SGL_ICON_ZIP_FILE
+#define SGL_ICON_ZIP_FILE      "\xef\x87\x86"   /* U+F1C6 file-zipper     */
+#endif
+#ifndef SGL_ICON_MUSIC_FILE
+#define SGL_ICON_MUSIC_FILE    "\xef\x87\x87"   /* U+F1C7 file-audio      */
+#endif
+#ifndef SGL_ICON_VIDEO_FILE
+#define SGL_ICON_VIDEO_FILE    "\xef\x87\x88"   /* U+F1C8 file-video      */
+#endif
+#ifndef SGL_ICON_CPP_FILE
+#define SGL_ICON_CPP_FILE      "\xef\x87\x89"   /* U+F1C9 file-code       */
+#endif
+#ifndef SGL_ICON_PICTURE
+#define SGL_ICON_PICTURE       "\xef\x80\xbe"   /* U+F03E image           */
+#endif
+#ifndef SGL_ICON_MUSIC
+#define SGL_ICON_MUSIC         "\xef\x80\x81"   /* U+F001 music           */
+#endif
+#ifndef SGL_ICON_FILM
+#define SGL_ICON_FILM          "\xef\x80\x88"   /* U+F008 film            */
+#endif
+
 /**
  * @brief One directory entry cached in RAM.
  * @text  : file name
@@ -139,6 +189,7 @@ typedef struct sgl_filebrowser {
     uint16_t item_num;
     int16_t  pending_dir_index;
     const sgl_font_t   *font;
+    const sgl_font_t   *icon_font;   /* NULL = draw icons with @font */
     sgl_color_t item_text_color;
     sgl_color_t item_selected_color;
     sgl_color_t card_color;        /* idle row card background        */
@@ -288,6 +339,16 @@ void sgl_filebrowser_set_text_font(sgl_obj_t *obj, const sgl_font_t *font);
  * @return none
  */
 void sgl_filebrowser_set_icons(sgl_obj_t *obj, const sgl_filebrowser_icon_t *icons);
+
+/**
+ * @brief Set the font used to draw the list icons of the file browser object.
+ * @param obj: file browser object
+ * @param font: icon font (must contain the icon glyphs), NULL = text font
+ * @return none
+ * @note icons are vertically centered in the row card, so the icon font may
+ *       have a different height than the text font. See sgl_icon_fontawesome14.
+ */
+void sgl_filebrowser_set_icon_font(sgl_obj_t *obj, const sgl_font_t *font);
 
 /**
  * @brief Set the icon width of the file browser object.

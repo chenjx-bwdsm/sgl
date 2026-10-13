@@ -11,9 +11,10 @@
 
 /* Simulated block devices. RAMFS ignores the IO callbacks; it only needs a
  * distinct, stable pointer to identify each "disk". The info->name is what the
- * file browser shows in its device list. */
-static const sgl_block_dev_info_t g_flash_info = { .name = "flash" };
-static const sgl_block_dev_info_t g_sd_info    = { .name = "sd" };
+ * file browser shows in its device list -- it can differ from the "/flash" /
+ * "/sd" mount paths, just like a product name differs from an internal path. */
+static const sgl_block_dev_info_t g_flash_info = { .name = "Flash" };
+static const sgl_block_dev_info_t g_sd_info    = { .name = "SD Card" };
 static sgl_block_dev_t g_flash_dev = { .info = &g_flash_info };
 static sgl_block_dev_t g_sd_dev    = { .info = &g_sd_info };
 
@@ -48,6 +49,39 @@ static void seed_demo_content(void)
     seed_file("/sd/music/loop.wav", "fake wav data");
 }
 
+/* Row icons: pattern -> glyph, using the SGL_ICON_* strings provided by the
+ * file browser header (FontAwesome codepoints rendered by sgl_icon_fontawesome14,
+ * generated from fonts/FontAwesome.otf with the sgl_font_conv tool). */
+static const sgl_filebrowser_icon_t g_filebrowser_icons[] = {
+    { "*",     SGL_ICON_NORMAL_FILE },
+    { "..",    SGL_ICON_RETURN_FILE },
+    { "dir",   SGL_ICON_DIR_FILE },
+    { ".txt",  SGL_ICON_TEXT_FILE },
+    { ".md",   SGL_ICON_TEXT_FILE },
+    { ".ini",  SGL_ICON_TEXT_FILE },
+    { ".log",  SGL_ICON_TEXT_FILE },
+    { ".pdf",  SGL_ICON_PDF_FILE },
+    { ".doc",  SGL_ICON_WORD_FILE },
+    { ".docx", SGL_ICON_WORD_FILE },
+    { ".xls",  SGL_ICON_EXCEL_FILE },
+    { ".xlsx", SGL_ICON_EXCEL_FILE },
+    { ".ppt",  SGL_ICON_PPT_FILE },
+    { ".pptx", SGL_ICON_PPT_FILE },
+    { ".png",  SGL_ICON_IMAGE_FILE },
+    { ".jpg",  SGL_ICON_IMAGE_FILE },
+    { ".bmp",  SGL_ICON_IMAGE_FILE },
+    { ".zip",  SGL_ICON_ZIP_FILE },
+    { ".rar",  SGL_ICON_ZIP_FILE },
+    { ".mp3",  SGL_ICON_MUSIC_FILE },
+    { ".wav",  SGL_ICON_MUSIC_FILE },
+    { ".mp4",  SGL_ICON_VIDEO_FILE },
+    { ".avi",  SGL_ICON_VIDEO_FILE },
+    { ".c",    SGL_ICON_CPP_FILE },
+    { ".h",    SGL_ICON_CPP_FILE },
+    { ".cpp",  SGL_ICON_CPP_FILE },
+    { NULL,    NULL },
+};
+
 void sgl_filebrowser_examples(sgl_obj_t *parent)
 {
     /* 1. mount one filesystem per block device */
@@ -70,4 +104,6 @@ void sgl_filebrowser_examples(sgl_obj_t *parent)
     sgl_obj_set_pos(fb, 380, 20);
     sgl_obj_set_size(fb, 405, 260);
     sgl_filebrowser_set_text_font(fb, &consolas14);
+    sgl_filebrowser_set_icon_font(fb, &sgl_icon_fontawesome14);
+    sgl_filebrowser_set_icons(fb, g_filebrowser_icons);
 }

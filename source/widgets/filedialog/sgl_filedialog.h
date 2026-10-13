@@ -113,6 +113,7 @@ typedef struct sgl_filedialog {
 
     /* style */
     const sgl_font_t *font;
+    const sgl_font_t *icon_font;   /* NULL = draw icons with @font */
     sgl_color_t item_text_color;
     sgl_color_t item_selected_color;
     sgl_color_t card_color;        /* idle row card background        */
@@ -179,6 +180,16 @@ void sgl_filedialog_set_text_font(sgl_obj_t *obj, const sgl_font_t *font);
  * @return none
  */
 void sgl_filedialog_set_icons(sgl_obj_t *obj, const sgl_filebrowser_icon_t *icons);
+
+/**
+ * @brief Set the font used to draw the list icons of the dialog
+ * @param obj: dialog object
+ * @param font: icon font (must contain the icon glyphs), NULL = text font
+ * @return none
+ * @note icons are vertically centered in the row card, so the icon font may
+ *       have a different height than the text font. See sgl_icon_fontawesome14.
+ */
+void sgl_filedialog_set_icon_font(sgl_obj_t *obj, const sgl_font_t *font);
 
 /**
  * @brief Set the icon column width of the dialog

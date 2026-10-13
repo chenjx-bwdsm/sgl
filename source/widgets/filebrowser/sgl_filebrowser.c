@@ -98,6 +98,10 @@ static const char *sgl_filebrowser_match_icon(const sgl_filebrowser_t *fb, const
 {
     if (fb->icons == NULL || item == NULL) return NULL;
 
+    /* The virtual "/" root lists block devices, not files: its rows are plain
+     * device names, so no icon is matched (and none is drawn) for them. */
+    if (sgl_filebrowser_is_root(fb)) return NULL;
+
     const char *default_icon = NULL;
     const char *dir_icon     = NULL;
     const char *parent_icon  = NULL;
@@ -125,13 +129,75 @@ static const char *sgl_filebrowser_match_icon(const sgl_filebrowser_t *fb, const
     return default_icon;
 }
 
+/* Font used to render the list icons: a dedicated icon font when one is set
+ * (sgl_filebrowser_set_icon_font), otherwise the widget text font. */
+static inline const sgl_font_t *sgl_filebrowser_icon_font(const sgl_filebrowser_t *fb)
+{
+    return fb->icon_font != NULL ? fb->icon_font : fb->font;
+}
+
+/* Decode the leading UTF-8 codepoint of an icon string. Icons are single
+ * characters (e.g. the SGL_ICON_* font glyphs), so only the first one matters. */
+static uint32_t sgl_filebrowser_icon_unicode(const char *icon)
+{
+    const uint8_t c = (uint8_t)icon[0];
+    uint32_t u;
+    int n, i;
+
+    if (c < 0x80) return c;
+    if ((c & 0xE0) == 0xC0)      { u = c & 0x1Fu; n = 1; }
+    else if ((c & 0xF0) == 0xE0) { u = c & 0x0Fu; n = 2; }
+    else if ((c & 0xF8) == 0xF0) { u = c & 0x07u; n = 3; }
+    else return c;
+
+    for (i = 1; i <= n && icon[i] != '\0'; ++i)
+        u = (u << 6) | ((uint8_t)icon[i] & 0x3Fu);
+    return u;
+}
+
+static void sgl_filebrowser_draw_icon(sgl_filebrowser_t *fb, sgl_surf_t *surf,
+                                      sgl_area_t *area, int16_t x,
+                                      int16_t card_y1, int16_t card_h,
+                                      const char *icon)
+{
+    const sgl_font_t *ifont = sgl_filebrowser_icon_font(fb);
+    int16_t y = (int16_t)(card_y1 + (card_h - sgl_font_get_height(ifont)) / 2);
+
+    if (ifont->table != NULL) {
+        uint32_t idx = sgl_search_unicode_ch_index(ifont,
+                                                   sgl_filebrowser_icon_unicode(icon));
+        if (idx != 0) {
+            const sgl_font_table_t *dsc = &ifont->table[idx];
+            y = (int16_t)(card_y1 + (card_h - dsc->box_h) / 2
+                          + dsc->box_h + dsc->ofs_y + ifont->base_line
+                          - ifont->font_height);
+        }
+    }
+    sgl_draw_string(surf, area, x, y, icon, fb->icon_color, fb->alpha, ifont);
+}
+
 static void sgl_filebrowser_resolve_item_icon(sgl_filebrowser_t *fb,
                                               sgl_filebrowser_item_t *item)
 {
     item->icon   = sgl_filebrowser_match_icon(fb, item);
     item->icon_w = (item->icon != NULL)
-                   ? (int16_t)sgl_font_get_string_width(item->icon, fb->font)
+                   ? (int16_t)sgl_font_get_string_width(item->icon, sgl_filebrowser_icon_font(fb))
                    : (int16_t)0;
+}
+
+/* Recompute the cached icon widths, e.g. after the text or icon font changed */
+static void sgl_filebrowser_refresh_icon_widths(sgl_filebrowser_t *fb)
+{
+    const sgl_font_t *ifont = sgl_filebrowser_icon_font(fb);
+
+    for (uint16_t i = 0; i < fb->cache_count; ++i) {
+        sgl_filebrowser_item_t *it = &fb->cache_items[i];
+        if (it->icon != NULL)
+            it->icon_w = (int16_t)sgl_font_get_string_width(it->icon, ifont);
+    }
+    if (fb->selected_item.icon != NULL)
+        fb->selected_item.icon_w =
+            (int16_t)sgl_font_get_string_width(fb->selected_item.icon, ifont);
 }
 
 static void sgl_filebrowser_close_dir(sgl_filebrowser_t *fb)
@@ -239,6 +305,8 @@ static int sgl_filebrowser_read_next(sgl_filebrowser_t *fb, char *name, size_t n
     if (sgl_filebrowser_is_root(fb)) {
         int cnt = sgl_fs_mount_count();
         if (fb->dir_cursor >= cnt) return 0;
+        /* The row label is the block device's info->name; the mount point
+         * basename is only the fallback for devices without info. */
         const char *nm = sgl_fs_mount_get_name((uint32_t)fb->dir_cursor);
         sgl_snprintf(name, name_size, "%s", nm ? nm : "?");
         *type = SGL_S_IFDIR;
@@ -607,7 +675,8 @@ static void sgl_filebrowser_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_e
      * clamped to the card body between the row gaps */
     int16_t card_radius = fb->card_radius;
     const int card_hpad = fb->card_hpad;
-    const int16_t icon_col_w = fb->icons != NULL
+    /* no icon column at the "/" root: the device rows have no icons */
+    const int16_t icon_col_w = (fb->icons != NULL && !sgl_filebrowser_is_root(fb))
                                ? (fb->icon_width == 0 ? (int16_t)item_height : (int16_t)fb->icon_width)
                                : (int16_t)0;
     /* row content starts where the card corner arc ends, as in sgl_menu */
@@ -714,10 +783,13 @@ static void sgl_filebrowser_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_e
             const int16_t text_y = row_y + SGL_FILEBROWSER_ITEM_SPACE;
 
             if (icon_col_w > 0 && item->icon != NULL) {
-                const int16_t icon_x = obj->coords.x1 + card_hpad + card_radius
-                                     + (icon_col_w - item->icon_w) / 2;
-                sgl_draw_string(surf, &list_area, icon_x, text_y,
-                                item->icon, fb->icon_color, fb->alpha, fb->font);
+                /* center the icon between the card left edge and the text */
+                const int16_t icon_x = obj->coords.x1 + card_hpad
+                                     + (card_radius + icon_col_w - item->icon_w) / 2;
+                sgl_filebrowser_draw_icon(fb, surf, &list_area, icon_x,
+                                          (int16_t)(row_y + SGL_FILEBROWSER_CARD_VMARGIN),
+                                          (int16_t)(item_height - 2 * SGL_FILEBROWSER_CARD_VMARGIN),
+                                          item->icon);
             }
             sgl_draw_string(surf, &list_area, text_x, text_y,
                             item->text, fb->item_text_color, fb->alpha, fb->font);
@@ -887,6 +959,7 @@ sgl_obj_t* sgl_filebrowser_create(sgl_obj_t *parent)
 
     fb->selected             = &fb->selected_item;
     fb->font                 = sgl_get_system_font();
+    fb->icon_font            = NULL;   /* NULL = draw icons with the text font */
     fb->alpha                = SGL_THEME_ALPHA;
     fb->bg_color             = SGL_THEME_COLOR;
     fb->item_selected_color  = sgl_color_mixer(SGL_THEME_COLOR, SGL_THEME_BORDER_COLOR, 128);
@@ -1133,19 +1206,26 @@ void sgl_filebrowser_set_text_font(sgl_obj_t *obj, const sgl_font_t *font)
 {
     sgl_filebrowser_t *fb = sgl_container_of(obj, sgl_filebrowser_t, obj);
     fb->font = font;
-    /* Icon widths depend on font. */
-    if (fb->cache_items != NULL) {
-        for (uint16_t i = 0; i < fb->cache_count; ++i) {
-            sgl_filebrowser_item_t *it = &fb->cache_items[i];
-            it->icon_w = (it->icon != NULL)
-                         ? (int16_t)sgl_font_get_string_width(it->icon, fb->font)
-                         : (int16_t)0;
-        }
-    }
-    if (fb->selected_item.icon != NULL) {
-        fb->selected_item.icon_w =
-            (int16_t)sgl_font_get_string_width(fb->selected_item.icon, fb->font);
-    }
+    /* Icon widths depend on the font actually used to draw them. */
+    sgl_filebrowser_refresh_icon_widths(fb);
+    sgl_obj_set_dirty(obj);
+}
+
+/**
+ * @brief Set the icon font of the file browser object.
+ * @param obj: file browser object
+ * @param font: font used to draw the list icons, NULL = use the text font
+ * @return none
+ * @note the icon glyphs must live in @font, e.g. the FontAwesome icon font
+ *       sgl_icon_fontawesome14; icons are vertically centered in the row card
+ */
+void sgl_filebrowser_set_icon_font(sgl_obj_t *obj, const sgl_font_t *font)
+{
+    sgl_filebrowser_t *fb = sgl_container_of(obj, sgl_filebrowser_t, obj);
+    if (fb->icon_font == font) return;
+
+    fb->icon_font = font;
+    sgl_filebrowser_refresh_icon_widths(fb);
     sgl_obj_set_dirty(obj);
 }
 
