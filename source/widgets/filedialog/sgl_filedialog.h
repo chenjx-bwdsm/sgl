@@ -34,12 +34,17 @@
  *       }
  *   }
  *
- *   sgl_obj_t *dlg = sgl_filedialog_open_file(NULL, NULL);  // NULL: let the user
- *                                                           // pick a device first
+ *   sgl_obj_t *dlg = sgl_filedialog_open_file(NULL, NULL);  // NULL: the dialog
+ *                                                           // opens on "/", which
+ *                                                           // lists the devices
  *   sgl_filedialog_set_confirm_cb(dlg, on_picked, NULL);
  *
  *   // or browse one device directly:
  *   sgl_obj_t *dlg2 = sgl_filedialog_open_dir(NULL, "/sd");
+ *
+ *   Like the file browser, the virtual "/" root lists every mounted block
+ *   device by name (with its free/total capacity); entering a device that way
+ *   and stepping back up with ".." returns to the device list.
  */
 #ifndef __SGL_FILEDIALOG_H__
 #define __SGL_FILEDIALOG_H__
@@ -103,9 +108,6 @@ typedef struct sgl_filedialog {
 
     /* dialog state */
     uint8_t  mode;          /* sgl_filedialog_mode_t */
-    uint8_t  at_devlist;    /* nonzero: showing the block device list */
-    uint8_t  from_devlist;  /* opened with dev_name == NULL (".." returns to the list) */
-    const char *title;
     sgl_filedialog_cb_t confirm_cb;
     void *cb_user_data;
 
@@ -125,7 +127,6 @@ typedef struct sgl_filedialog {
     sgl_scroll_t sc;
 
     char current_path[SGL_FILEDIALOG_PATH_MAX_LEN];
-    char dev_root[SGL_FILEDIALOG_PATH_MAX_LEN];
     char result_path[SGL_FILEDIALOG_PATH_MAX_LEN];
 } sgl_filedialog_t;
 
@@ -133,8 +134,8 @@ typedef struct sgl_filedialog {
  * @brief Open a "pick a file" dialog
  * @param parent: parent object; NULL creates the dialog on the active screen
  * @param dev_name: registered block device name, e.g. "sd" (the leading '/'
- *        of the mount point is optional: "/sd" works too); NULL shows the
- *        device list first so the user can pick one
+ *        of the mount point is optional: "/sd" works too); NULL opens on the
+ *        virtual "/" root, which lists the mounted block devices
  * @return dialog object, or NULL on allocation failure
  */
 sgl_obj_t *sgl_filedialog_open_file(sgl_obj_t *parent, const char *dev_name);
@@ -142,7 +143,8 @@ sgl_obj_t *sgl_filedialog_open_file(sgl_obj_t *parent, const char *dev_name);
 /**
  * @brief Open a "pick a directory" dialog
  * @param parent: parent object; NULL creates the dialog on the active screen
- * @param dev_name: registered block device name; NULL shows the device list first
+ * @param dev_name: registered block device name; NULL opens on the virtual
+ *        "/" root, which lists the mounted block devices
  * @return dialog object, or NULL on allocation failure
  */
 sgl_obj_t *sgl_filedialog_open_dir(sgl_obj_t *parent, const char *dev_name);
@@ -155,14 +157,6 @@ sgl_obj_t *sgl_filedialog_open_dir(sgl_obj_t *parent, const char *dev_name);
  * @return none
  */
 void sgl_filedialog_set_confirm_cb(sgl_obj_t *obj, sgl_filedialog_cb_t cb, void *user_data);
-
-/**
- * @brief Set the dialog title shown in the top bar of the device list
- * @param obj: dialog object
- * @param title: title string (must outlive the dialog); NULL restores default
- * @return none
- */
-void sgl_filedialog_set_title(sgl_obj_t *obj, const char *title);
 
 /**
  * @brief Set the text font of the dialog

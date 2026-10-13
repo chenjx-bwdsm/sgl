@@ -57,13 +57,12 @@ static void sgl_filedialog_example_open_file_cb(sgl_event_t *event)
 {
     if (event->type != SGL_EVENT_CLICKED) return;
 
-    /* dev_name = NULL: the dialog shows the registered block devices first */
+    /* dev_name = NULL: the dialog opens on "/", listing the block devices */
     sgl_obj_t *dlg = sgl_filedialog_open_file(NULL, NULL);
     if (dlg == NULL) {
         sgl_filedialog_example_status("dialog alloc failed");
         return;
     }
-    sgl_filedialog_set_title(dlg, "Open file - select device");
     sgl_filedialog_set_text_font(dlg, &consolas14);
     sgl_filedialog_set_confirm_cb(dlg, sgl_filedialog_example_confirm, NULL);
 }
@@ -77,7 +76,6 @@ static void sgl_filedialog_example_open_dir_cb(sgl_event_t *event)
         sgl_filedialog_example_status("dialog alloc failed");
         return;
     }
-    sgl_filedialog_set_title(dlg, "Select directory - select device");
     sgl_filedialog_set_text_font(dlg, &consolas14);
     sgl_filedialog_set_confirm_cb(dlg, sgl_filedialog_example_confirm, NULL);
 }

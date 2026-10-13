@@ -70,18 +70,11 @@ static void sgl_filedialog_join_path(char *dst, size_t dst_size,
     out[name_len] = '\0';
 }
 
-static bool sgl_filedialog_at_dev_root(const sgl_filedialog_t *fd)
+/* The virtual "/" root lists the mounted block devices, exactly like the file
+ * browser: no ".." there, and ".." at a device root returns to it */
+static inline bool sgl_filedialog_is_root(const sgl_filedialog_t *fd)
 {
-    return fd->dev_root[0] != '\0' && strcmp(fd->current_path, fd->dev_root) == 0;
-}
-
-/* ".." is shown while browsing files, except at the root of a device the
- * dialog was opened on directly (no device list to go back to) */
-static bool sgl_filedialog_has_parent(const sgl_filedialog_t *fd)
-{
-    if (fd->at_devlist) return false;
-    if (fd->from_devlist) return true;
-    return !sgl_filedialog_at_dev_root(fd);
+    return fd->current_path[0] == '/' && fd->current_path[1] == '\0';
 }
 
 static const char *sgl_filedialog_match_icon(const sgl_filedialog_t *fd,
@@ -134,6 +127,50 @@ static void sgl_filedialog_resolve_item_icon(sgl_filedialog_t *fd,
                    : (int16_t)0;
 }
 
+/* Format a byte count into a compact human string, e.g. 10485760 -> "10.0M",
+ * 512 -> "512B". Uses binary (1024) units B/K/M/G with one fractional digit. */
+static void sgl_filedialog_format_size(uint64_t bytes, char *out, size_t n)
+{
+    static const char units[] = "BKMG";
+    int u = 0;
+    uint64_t v = bytes;
+    while (v >= 1024ULL && u < 3) { v >>= 10; u++; }
+
+    if (u == 0) {
+        sgl_snprintf(out, n, "%d%c", (int)bytes, units[0]);
+    } else {
+        uint64_t scale  = 1ULL << (u * 10);
+        uint64_t whole  = bytes / scale;
+        uint64_t frac10 = ((bytes % scale) * 10) / scale;
+        sgl_snprintf(out, n, "%d.%d%c",
+                     (int)whole, (int)frac10, units[u]);
+    }
+}
+
+/* Draw the free/total capacity of the device at mount index `mnt_idx`,
+ * right-aligned to the row's right edge. No-op when capacity is unknown.
+ * Computed on the fly so no per-item buffer is needed. */
+static void sgl_filedialog_draw_dev_capacity(sgl_filedialog_t *fd, sgl_surf_t *surf,
+                                             sgl_obj_t *obj, sgl_area_t *list_area,
+                                             int item_pad, int16_t text_y, int16_t mnt_idx)
+{
+    const char *mp = sgl_fs_mount_get_path((uint32_t)mnt_idx);
+    sgl_statvfs_t sv;
+    if (mp == NULL || sgl_fs_statvfs(mp, &sv) != SGL_FS_OK || sv.f_blocks == 0) return;
+
+    uint64_t total = (uint64_t)sv.f_bsize * sv.f_blocks;
+    uint64_t avail = (uint64_t)sv.f_bsize * sv.f_bfree;
+    char ts[16], as[16], cap[24];
+    sgl_filedialog_format_size(total, ts, sizeof(ts));
+    sgl_filedialog_format_size(avail, as, sizeof(as));
+    sgl_snprintf(cap, sizeof(cap), "%s/%s", as, ts);
+
+    const int cap_w = (int)sgl_font_get_string_width(cap, fd->font);
+    const int16_t cap_x = (int16_t)(obj->coords.x2 - obj->border - item_pad - cap_w);
+    sgl_draw_string(surf, list_area, cap_x, text_y,
+                    cap, fd->item_text_color, fd->alpha, fd->font);
+}
+
 static void sgl_filedialog_close_dir(sgl_filedialog_t *fd)
 {
     if (fd->dir_handle >= 0) {
@@ -148,6 +185,14 @@ static void sgl_filedialog_close_dir(sgl_filedialog_t *fd)
 static bool sgl_filedialog_seek_dir(sgl_filedialog_t *fd, int16_t target)
 {
     if (target < 0) target = 0;
+
+    /* At the virtual "/" root the list is the mounted block devices, which
+     * are enumerated directly from the VFS mount table (no dir handle). */
+    if (sgl_filedialog_is_root(fd)) {
+        fd->dir_handle = -1;
+        fd->dir_cursor = target;
+        return true;
+    }
 
     if (fd->dir_handle < 0 || fd->dir_cursor > target) {
         sgl_filedialog_close_dir(fd);
@@ -177,6 +222,15 @@ static bool sgl_filedialog_seek_dir(sgl_filedialog_t *fd, int16_t target)
 static int sgl_filedialog_read_next(sgl_filedialog_t *fd,
                                     char *name, size_t name_size, uint32_t *type)
 {
+    if (sgl_filedialog_is_root(fd)) {
+        int cnt = sgl_fs_mount_count();
+        if (fd->dir_cursor >= cnt) return 0;
+        const char *nm = sgl_fs_mount_get_name((uint32_t)fd->dir_cursor);
+        sgl_snprintf(name, name_size, "%s", nm ? nm : "?");
+        *type = SGL_S_IFDIR;
+        fd->dir_cursor++;
+        return 1;
+    }
     if (fd->dir_handle < 0) return 0;
     for (;;) {
         int r = sgl_fs_readdir(fd->dir_handle, name, name_size, type);
@@ -262,22 +316,7 @@ static void sgl_filedialog_fill_window(sgl_filedialog_t *fd, int16_t start_index
     fd->cache_count       = 0;
     uint16_t written = 0;
 
-    if (fd->at_devlist) {
-        /* device list level: rows come straight from the device-backed
-         * mount points (enumerated live so hot-plugged mounts show up) */
-        int count = sgl_fs_mount_count();
-        for (int i = start_index; i < count && written < want; ++i) {
-            const char *mp = sgl_fs_mount_get_path((uint32_t)i);
-            if (mp == NULL) continue;
-            sgl_filedialog_init_item(&fd->cache_items[written], mp, SGL_S_IFDIR);
-            sgl_filedialog_resolve_item_icon(fd, &fd->cache_items[written]);
-            written++;
-        }
-        fd->cache_count = written;
-        return;
-    }
-
-    const bool has_parent = sgl_filedialog_has_parent(fd);
+    const bool has_parent = !sgl_filedialog_is_root(fd);
 
     /* 1. emit ".." if it falls inside the window */
     if (has_parent && start_index == 0 && written < want) {
@@ -392,23 +431,9 @@ static void sgl_filedialog_select_index(sgl_filedialog_t *fd, int16_t index)
     fd->item_selected = index;
 }
 
-/* Show the registered block devices as the top level */
-static void sgl_filedialog_show_devices(sgl_filedialog_t *fd)
-{
-    sgl_filedialog_clear_items(fd);
-    fd->at_devlist      = 1;
-    fd->dev_root[0]     = '\0';
-    fd->current_path[0] = '\0';
-    fd->item_num        = (uint16_t)sgl_max(0, sgl_fs_mount_count());
-    if (fd->item_num > 0) {
-        sgl_filedialog_select_index(fd, 0);
-    }
-}
-
 static void sgl_filedialog_load_dir(sgl_filedialog_t *fd, const char *path)
 {
     sgl_filedialog_clear_items(fd);
-    fd->at_devlist = 0;
 
     if (path == NULL || path[0] == '\0') {
         strncpy(fd->current_path, "/", sizeof(fd->current_path) - 1);
@@ -418,18 +443,24 @@ static void sgl_filedialog_load_dir(sgl_filedialog_t *fd, const char *path)
     fd->current_path[sizeof(fd->current_path) - 1] = '\0';
     sgl_filedialog_trim_trailing_slash(fd->current_path);
 
-    /* count entries once; the cache window is filled lazily on draw */
-    uint16_t count = sgl_filedialog_has_parent(fd) ? 1 : 0;
-    int dd = -1;
-    if (sgl_fs_opendir(fd->current_path, &dd) == SGL_FS_OK) {
-        char name[SGL_FILEDIALOG_NAME_MAX_LEN];
-        uint32_t type;
-        while (sgl_fs_readdir(dd, name, sizeof(name), &type) > 0) {
-            if (sgl_filedialog_is_valid_dir_entry(name)) count++;
-        }
-        sgl_fs_closedir(dd);
+    /* count entries once; the cache window is filled lazily on draw.
+     * The virtual "/" root lists mounted block devices, not a directory. */
+    uint16_t count;
+    if (sgl_filedialog_is_root(fd)) {
+        count = (uint16_t)sgl_fs_mount_count();
     } else {
-        SGL_LOG_WARN("sgl_filedialog: cannot open dir '%s'", fd->current_path);
+        count = 1; /* ".." */
+        int dd = -1;
+        if (sgl_fs_opendir(fd->current_path, &dd) == SGL_FS_OK) {
+            char name[SGL_FILEDIALOG_NAME_MAX_LEN];
+            uint32_t type;
+            while (sgl_fs_readdir(dd, name, sizeof(name), &type) > 0) {
+                if (sgl_filedialog_is_valid_dir_entry(name)) count++;
+            }
+            sgl_fs_closedir(dd);
+        } else {
+            SGL_LOG_WARN("sgl_filedialog: cannot open dir '%s'", fd->current_path);
+        }
     }
     fd->item_num = count;
 
@@ -438,24 +469,13 @@ static void sgl_filedialog_load_dir(sgl_filedialog_t *fd, const char *path)
     }
 }
 
-static void sgl_filedialog_enter_device(sgl_filedialog_t *fd, const char *name)
-{
-    if (name == NULL || name[0] == '\0') return;
-    sgl_snprintf(fd->dev_root, sizeof(fd->dev_root), "%s", name);
-    sgl_filedialog_trim_trailing_slash(fd->dev_root);
-    if (fd->dev_root[0] == '\0') {
-        strcpy(fd->dev_root, "/");
-    }
-    sgl_filedialog_load_dir(fd, fd->dev_root);
-}
-
 /* ------------------------------------------------------------------------- */
 /* Confirmation                                                              */
 /* ------------------------------------------------------------------------- */
 
 static bool sgl_filedialog_can_confirm(const sgl_filedialog_t *fd)
 {
-    if (fd->at_devlist) return false;
+    if (sgl_filedialog_is_root(fd)) return false;
     if (fd->mode == SGL_FILEDIALOG_OPEN_DIR) return true; /* current dir at least */
     return fd->selected != NULL &&
            fd->selected->text[0] != '\0' &&
@@ -607,36 +627,21 @@ static void sgl_filedialog_activate_index(sgl_filedialog_t *fd, sgl_obj_t *obj, 
     sgl_filedialog_select_index(fd, index);
     if (fd->selected == NULL) return;
 
-    if (fd->at_devlist) {
-        /* single click highlights, second click enters the device */
-        if (reclick) {
-            const char *mp = sgl_fs_mount_get_path((uint32_t)index);
-            if (mp != NULL) {
-                sgl_filedialog_enter_device(fd, mp);
-            }
-        }
-        sgl_obj_set_dirty(obj);
-        return;
-    }
-
     if (strcmp(fd->selected->text, SGL_FILEDIALOG_PARENT_NAME) == 0) {
-        /* single click highlights, second click goes up to the parent */
+        /* single click highlights, second click goes up to the parent
+         * (at a device root this steps back onto the device list) */
         if (reclick) {
-            if (fd->from_devlist && sgl_filedialog_at_dev_root(fd)) {
-                sgl_filedialog_show_devices(fd);
-            } else {
-                char parent_path[SGL_FILEDIALOG_PATH_MAX_LEN];
-                strncpy(parent_path, fd->current_path, sizeof(parent_path) - 1);
-                parent_path[sizeof(parent_path) - 1] = '\0';
-                sgl_filedialog_trim_trailing_slash(parent_path);
+            char parent_path[SGL_FILEDIALOG_PATH_MAX_LEN];
+            strncpy(parent_path, fd->current_path, sizeof(parent_path) - 1);
+            parent_path[sizeof(parent_path) - 1] = '\0';
+            sgl_filedialog_trim_trailing_slash(parent_path);
 
-                char *slash = strrchr(parent_path, '/');
-                if (slash == NULL)              strcpy(parent_path, "/");
-                else if (slash == parent_path)  parent_path[1] = '\0';
-                else                            *slash = '\0';
+            char *slash = strrchr(parent_path, '/');
+            if (slash == NULL)              strcpy(parent_path, "/");
+            else if (slash == parent_path)  parent_path[1] = '\0';
+            else                            *slash = '\0';
 
-                sgl_filedialog_load_dir(fd, parent_path);
-            }
+            sgl_filedialog_load_dir(fd, parent_path);
         }
         sgl_obj_set_dirty(obj);
         return;
@@ -645,8 +650,19 @@ static void sgl_filedialog_activate_index(sgl_filedialog_t *fd, sgl_obj_t *obj, 
     if (fd->selected->type == SGL_S_IFDIR) {
         if (reclick) {
             char next_path[SGL_FILEDIALOG_PATH_MAX_LEN];
-            sgl_filedialog_join_path(next_path, sizeof(next_path),
-                                     fd->current_path, fd->selected->text);
+            if (sgl_filedialog_is_root(fd)) {
+                /* device list: enter the clicked device's mount point */
+                const char *mnt = sgl_fs_mount_get_path((uint32_t)index);
+                if (mnt == NULL) {
+                    sgl_obj_set_dirty(obj);
+                    return;
+                }
+                strncpy(next_path, mnt, sizeof(next_path) - 1);
+                next_path[sizeof(next_path) - 1] = '\0';
+            } else {
+                sgl_filedialog_join_path(next_path, sizeof(next_path),
+                                         fd->current_path, fd->selected->text);
+            }
             sgl_filedialog_load_dir(fd, next_path);
         }
         sgl_obj_set_dirty(obj);
@@ -699,7 +715,7 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
         };
         sgl_draw_rect(surf, &obj->area, &obj->coords, &bg_desc);
 
-        /* --- title bar: device list title or current path --- */
+        /* --- title bar: current path ("/" on the device list) --- */
         {
             const int16_t title_y1 = obj->coords.y1 + obj->border;
             const int16_t title_y2 = title_y1 + item_height - 1;
@@ -714,16 +730,10 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
             sgl_draw_fill_rect(surf, &title_area, &title_rect, obj->radius,
                                fd->path_color, fd->alpha);
 
-            const char *title_text;
-            if (fd->at_devlist) {
-                title_text = fd->title != NULL ? fd->title : "Select device";
-            } else {
-                title_text = fd->current_path;
-            }
             sgl_draw_string(surf, &obj->area,
                             title_rect.x1 + obj->radius + SGL_FILEDIALOG_ITEM_PAD,
                             title_rect.y1 + SGL_FILEDIALOG_ITEM_PAD,
-                            title_text, fd->item_text_color, fd->alpha, fd->font);
+                            fd->current_path, fd->item_text_color, fd->alpha, fd->font);
 
             /* close box at the right end of the title bar: draw an X (cross) */
             const int16_t cx2 = obj->coords.x2 - obj->border - SGL_FILEDIALOG_ITEM_PAD;
@@ -749,7 +759,8 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
             sgl_draw_fill_rect(surf, &bar_area, &bar_rect, obj->radius,
                                fd->path_color, fd->alpha);
 
-            if (!fd->at_devlist && fd->selected != NULL && fd->selected->text[0] != '\0') {
+            if (!sgl_filedialog_is_root(fd) && fd->selected != NULL &&
+                fd->selected->text[0] != '\0') {
                 sgl_draw_string(surf, &bar_area,
                                 bar_area.x1 + obj->radius + SGL_FILEDIALOG_ITEM_PAD,
                                 bar_y1 + SGL_FILEDIALOG_ITEM_SPACE,
@@ -779,7 +790,7 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
         };
 
         if (fd->item_num == 0) {
-            const char *hint = fd->at_devlist ? "No block device registered" : "Empty directory";
+            const char *hint = sgl_filedialog_is_root(fd) ? "No block device registered" : "Empty directory";
             sgl_draw_string(surf, &list_area,
                             obj->coords.x1 + item_pad,
                             list_y1 + SGL_FILEDIALOG_ITEM_SPACE,
@@ -841,6 +852,12 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
             }
             sgl_draw_string(surf, &list_area, text_x, text_y,
                             item->text, text_color, fd->alpha, fd->font);
+
+            /* device list (root): append free/total capacity, right-aligned */
+            if (sgl_filedialog_is_root(fd)) {
+                sgl_filedialog_draw_dev_capacity(fd, surf, obj, &list_area,
+                                                 item_pad, text_y, idx);
+            }
         }
 
         sgl_scroll_draw_bar(surf, obj, &fd->sc, max_scroll, &viewport,
@@ -988,20 +1005,15 @@ static sgl_obj_t *sgl_filedialog_create(sgl_obj_t *parent, const char *dev_name,
                         (int16_t)((SGL_SCREEN_HEIGHT - h) / 2));
     }
 
-    if (dev_name != NULL) {
-        const char *mp = sgl_fs_mount_find(dev_name);
-        if (mp != NULL) {
-            fd->from_devlist = 0;
-            sgl_filedialog_enter_device(fd, mp);
-        } else {
+    /* dev_name == NULL (or unmounted) opens on the virtual "/" root, which
+     * lists every mounted block device, same as the file browser */
+    {
+        const char *mount = (dev_name != NULL) ? sgl_fs_mount_find(dev_name) : NULL;
+        if (dev_name != NULL && mount == NULL) {
             SGL_LOG_WARN("sgl_filedialog: device '%s' not mounted, showing device list",
                          dev_name);
-            fd->from_devlist = 1;
-            sgl_filedialog_show_devices(fd);
         }
-    } else {
-        fd->from_devlist = 1;
-        sgl_filedialog_show_devices(fd);
+        sgl_filedialog_load_dir(fd, mount != NULL ? mount : "/");
     }
 
     return &fd->obj;
@@ -1031,16 +1043,6 @@ void sgl_filedialog_set_confirm_cb(sgl_obj_t *obj, sgl_filedialog_cb_t cb, void 
     sgl_filedialog_t *fd = sgl_container_of(obj, sgl_filedialog_t, obj);
     fd->confirm_cb  = cb;
     fd->cb_user_data = user_data;
-}
-
-/**
- * @brief Set the dialog title
- */
-void sgl_filedialog_set_title(sgl_obj_t *obj, const char *title)
-{
-    sgl_filedialog_t *fd = sgl_container_of(obj, sgl_filedialog_t, obj);
-    fd->title = title;
-    sgl_obj_set_dirty(obj);
 }
 
 /**

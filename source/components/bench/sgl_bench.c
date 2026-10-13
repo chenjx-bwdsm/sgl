@@ -242,7 +242,9 @@ static void bench_choose_grid(int sw, int sh, int target, int min_cols, int max_
 static int16_t bench_cell_radius(int16_t cw, int16_t ch)
 {
     int16_t m = (cw < ch) ? cw : ch;
-    int16_t r = (int16_t)(m / 2 - g_lay.pad);
+    /* One pixel less than the cell allows: sgl_draw_fill_arc() spans cx - r .. cx + r,
+     * i.e. 2r + 1 pixels, so a radius of m / 2 - pad would clip the outermost ring */
+    int16_t r = (int16_t)(m / 2 - g_lay.pad - 1);
 
     return r < 3 ? 3 : r;
 }
@@ -1100,7 +1102,8 @@ static void bench_report_console(void)
                  BENCH_SCENE_N, (int)SGL_BENCH_SCENE_MS, (int)SGL_BENCH_WARMUP_MS);
 
     bench_name_pad(head, sizeof(head), "scene");
-    SGL_LOG_INFO("%s    FPS    ms/frame    max fps         Mpx/s", head);
+    /* Labels are right-aligned to the fields printed by bench_report_row() */
+    SGL_LOG_INFO("%s    FPS     ms/frame    max fps         Mpx/s", head);
 
     for (i = 0; i < BENCH_SCENE_N; i++) {
         char name_pad[BENCH_NAME_W + 2];
