@@ -69,6 +69,11 @@
  *   The browser opens at the virtual "/" root, which lists every mounted
  *   block device by name; clicking a device enters its file system, and
  *   ".." at a device root returns to the device list.
+ *
+ *   While the device list is open the title bar shows a label instead of the
+ *   bare "/" path: "DISK" by default, or whatever
+ *   sgl_filebrowser_set_root_text() was given. Any other directory keeps
+ *   showing its own path.
  */
 #ifndef __SGL_FILEBROWSER_H__
 #define __SGL_FILEBROWSER_H__
@@ -81,6 +86,10 @@ extern "C" {
 
 #define SGL_FILEBROWSER_PATH_MAX_LEN  (128)
 #define SGL_FILEBROWSER_NAME_MAX_LEN  (64)
+
+/* Title bar label shown on the virtual "/" root, where the real path would
+ * read as a bare "/" (see sgl_filebrowser_set_root_text) */
+#define SGL_FILEBROWSER_ROOT_TEXT_MAX_LEN (32)
 
 /* Cache size = visible_rows * SGL_FILEBROWSER_CACHE_MULT.
  * 2 = one screen ahead + one screen buffer (recommended).
@@ -207,6 +216,7 @@ typedef struct sgl_filebrowser {
     uint8_t card_hpad;
     sgl_scroll_t sc;                   /**< shared scroll physics state (sgl_misc) */
     char current_path[SGL_FILEBROWSER_PATH_MAX_LEN];
+    char root_text[SGL_FILEBROWSER_ROOT_TEXT_MAX_LEN]; /* title on the "/" root */
 } sgl_filebrowser_t;
 
 /**
@@ -245,6 +255,17 @@ uint32_t sgl_filebrowser_get_selected_type(sgl_obj_t *obj);
  * @return none
  */
 void sgl_filebrowser_refresh(sgl_obj_t *obj);
+
+/**
+ * @brief Set the label shown in the title bar on the virtual "/" root
+ * @param obj: file browser object
+ * @param text: label to show while the device list is open (e.g. "DISK").
+ *              NULL or an empty string restores the default "DISK"
+ * @return none
+ * @note the real path ("/") is never shown at the root; every other directory
+ *       still shows its own path, exactly as before
+ */
+void sgl_filebrowser_set_root_text(sgl_obj_t *obj, const char *text);
 
 /**
  * @brief Set the radius of the file browser object.

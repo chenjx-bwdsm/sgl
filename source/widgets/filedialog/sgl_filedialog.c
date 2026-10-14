@@ -38,6 +38,7 @@
 #define SGL_FILEDIALOG_PARENT_NAME     ".."
 #define SGL_FILEDIALOG_OK_TEXT         "OK"
 #define SGL_FILEDIALOG_OK_MARGIN       (3)   /* OK pill inset inside the bottom bar */
+#define SGL_FILEDIALOG_ROOT_TEXT       "DISK" /* default title on the "/" root */
 
 /* rounded row card style, same scheme as sgl_menu */
 #define SGL_FILEDIALOG_CARD_VMARGIN    (1)   /* gap between card and row edge  */
@@ -84,6 +85,11 @@ static void sgl_filedialog_join_path(char *dst, size_t dst_size,
 static inline bool sgl_filedialog_is_root(const sgl_filedialog_t *fd)
 {
     return fd->current_path[0] == '/' && fd->current_path[1] == '\0';
+}
+
+static inline const char *sgl_filedialog_title_text(const sgl_filedialog_t *fd)
+{
+    return sgl_filedialog_is_root(fd) ? fd->root_text : fd->current_path;
 }
 
 static const char *sgl_filedialog_match_icon(const sgl_filedialog_t *fd,
@@ -545,10 +551,6 @@ static void sgl_filedialog_load_dir(sgl_filedialog_t *fd, const char *path)
      * first row is only selected once the user clicks it (or presses a key) */
 }
 
-/* ------------------------------------------------------------------------- */
-/* Confirmation                                                              */
-/* ------------------------------------------------------------------------- */
-
 static bool sgl_filedialog_can_confirm(const sgl_filedialog_t *fd)
 {
     if (sgl_filedialog_is_root(fd)) return false;
@@ -592,10 +594,6 @@ static void sgl_filedialog_confirm(sgl_filedialog_t *fd)
     if (fd->result_path[0] == '\0') return;
     sgl_filedialog_finish(fd, fd->result_path);
 }
-
-/* ------------------------------------------------------------------------- */
-/* Geometry                                                                  */
-/* ------------------------------------------------------------------------- */
 
 static int32_t sgl_filedialog_max_scroll(const sgl_filedialog_t *fd, const sgl_obj_t *obj,
                                          int item_height, int list_h)
@@ -662,13 +660,7 @@ static uint16_t sgl_filedialog_target_capacity(int item_height, int list_h)
     return (uint16_t)cap;
 }
 
-/* OK button (pill) rectangle inside the bottom bar.
- * The bar's visible area spans from list_y2 + 1 (its top, where the rounded
- * bar corners stop being clipped) down to the dialog's inner bottom edge.
- * The pill is right-aligned to the bar and vertically centered within it.
- * Both the draw path and the click hit-test call this, so they always agree. */
-static void sgl_filedialog_ok_rect(const sgl_filedialog_t *fd, const sgl_obj_t *obj,
-                                   int list_y2, sgl_area_t *out)
+static void sgl_filedialog_ok_rect(const sgl_filedialog_t *fd, const sgl_obj_t *obj, int list_y2, sgl_area_t *out)
 {
     const int font_h = sgl_font_get_height(fd->font);
     const int text_w = sgl_font_get_string_width(SGL_FILEDIALOG_OK_TEXT, fd->font);
@@ -692,10 +684,6 @@ static bool sgl_filedialog_pos_in_area(const sgl_area_t *area, int16_t x, int16_
 {
     return x >= area->x1 && x <= area->x2 && y >= area->y1 && y <= area->y2;
 }
-
-/* ------------------------------------------------------------------------- */
-/* Activate (click / enter key) one row                                      */
-/* ------------------------------------------------------------------------- */
 
 static void sgl_filedialog_activate_index(sgl_filedialog_t *fd, sgl_obj_t *obj, int16_t index)
 {
@@ -756,10 +744,6 @@ static void sgl_filedialog_activate_index(sgl_filedialog_t *fd, sgl_obj_t *obj, 
     sgl_obj_set_dirty(obj);
 }
 
-/* ------------------------------------------------------------------------- */
-/* Construct / event callback                                                */
-/* ------------------------------------------------------------------------- */
-
 static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_event_t *evt)
 {
     sgl_filedialog_t *fd = sgl_container_of(obj, sgl_filedialog_t, obj);
@@ -805,74 +789,72 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
             .radius       = obj->radius,
             .pixmap       = NULL,
         };
+        /* title bar geometry */
+        const char *title_text = sgl_filedialog_title_text(fd);
+        const int16_t title_y1 = obj->coords.y1 + obj->border;
+        const int16_t title_y2 = title_y1 + bar_h - 1;
+        sgl_area_t title_area = {
+            .x1 = obj->area.x1 + obj->border,  .y1 = title_y1,
+            .x2 = obj->area.x2 - obj->border,  .y2 = title_y2,
+        };
+        sgl_area_t title_rect = {
+            .x1 = obj->coords.x1 + obj->border, .y1 = title_y1,
+            .x2 = obj->coords.x2 - obj->border, .y2 = title_y2 + obj->radius + obj->border,
+        };
+        /* close box at the right end of the title bar */
+        const int16_t cx2   = obj->coords.x2 - obj->border - SGL_FILEDIALOG_ITEM_PAD;
+        const int16_t cx1   = cx2 - bar_h + 2 * SGL_FILEDIALOG_ITEM_PAD;
+        const int16_t ccx   = (int16_t)((cx1 + cx2) / 2);        /* box center x */
+        const int16_t ccy   = (int16_t)(title_y1 + bar_h / 2);   /* bar center y */
+        const int16_t csize = (int16_t)((bar_h - 4 * SGL_FILEDIALOG_ITEM_PAD) / 2);
+
+        /* bottom bar geometry */
+        const int16_t bar_y1 = list_y2 + 1;
+        sgl_area_t bar_area = {
+            .x1 = obj->area.x1 + obj->border,  .y1 = bar_y1,
+            .x2 = obj->area.x2 - obj->border,  .y2 = obj->area.y2 - obj->border,
+        };
+        sgl_area_t bar_rect = {
+            .x1 = obj->coords.x1 + obj->border, .y1 = bar_y1 - obj->radius - obj->border,
+            .x2 = obj->coords.x2 - obj->border, .y2 = obj->coords.y2 - obj->border,
+        };
+        sgl_area_t ok_rect;
+        const bool can_ok = sgl_filedialog_can_confirm(fd);
+        const int ok_text_w = sgl_font_get_string_width(SGL_FILEDIALOG_OK_TEXT, fd->font);
+        const int ok_text_h = sgl_font_get_height(fd->font);
+
         sgl_draw_rect(surf, &obj->area, &obj->coords, &bg_desc);
 
-        /* --- title bar: current path ("/" on the device list) --- */
-        {
-            const int16_t title_y1 = obj->coords.y1 + obj->border;
-            const int16_t title_y2 = title_y1 + bar_h - 1;
-            sgl_area_t title_area = {
-                .x1 = obj->area.x1 + obj->border,  .y1 = title_y1,
-                .x2 = obj->area.x2 - obj->border,  .y2 = title_y2,
-            };
-            sgl_area_t title_rect = {
-                .x1 = obj->coords.x1 + obj->border, .y1 = title_y1,
-                .x2 = obj->coords.x2 - obj->border, .y2 = title_y2 + obj->radius + obj->border,
-            };
-            sgl_draw_fill_rect(surf, &title_area, &title_rect, obj->radius,
-                               fd->path_color, fd->alpha);
-
-            sgl_draw_string(surf, &obj->area,
-                            title_rect.x1 + obj->radius + SGL_FILEDIALOG_ITEM_PAD,
-                            title_y1 + (bar_h - sgl_font_get_height(fd->font)) / 2,
-                            fd->current_path, fd->item_text_color, fd->alpha, fd->font);
-
-            /* close box at the right end of the title bar: draw an X (cross) */
-            const int16_t cx2 = obj->coords.x2 - obj->border - SGL_FILEDIALOG_ITEM_PAD;
-            const int16_t cx1 = cx2 - bar_h + 2 * SGL_FILEDIALOG_ITEM_PAD;
-            const int16_t ccx   = (int16_t)((cx1 + cx2) / 2);        /* box center x */
-            const int16_t ccy   = (int16_t)(title_y1 + bar_h / 2);   /* bar center y */
-            const int16_t csize = (int16_t)((bar_h - 4 * SGL_FILEDIALOG_ITEM_PAD) / 2);
-            sgl_draw_cross(surf, &obj->area, (int16_t)(ccx - csize), (int16_t)(ccy - csize),
-                           csize, fd->item_text_color, 1, fd->alpha);
-        }
+        /* --- title bar: current path, or the root label on the device list --- */
+        sgl_draw_fill_rect(surf, &title_area, &title_rect, obj->radius,
+                           fd->path_color, fd->alpha);
+        sgl_draw_string(surf, &obj->area,
+                        title_rect.x1 + obj->radius + 2 * SGL_FILEDIALOG_ITEM_PAD,
+                        title_y1 + (bar_h - sgl_font_get_height(fd->font)) / 2,
+                        title_text, fd->item_text_color, fd->alpha, fd->font);
+        /* close box: draw an X (cross) at the right end of the title bar */
+        sgl_draw_cross(surf, &obj->area, (int16_t)(ccx - csize), (int16_t)(ccy - csize),
+                       csize, fd->item_text_color, 1, fd->alpha);
 
         /* --- bottom bar: selection hint + OK button --- */
-        {
-            const int16_t bar_y1 = list_y2 + 1;
-            sgl_area_t bar_area = {
-                .x1 = obj->area.x1 + obj->border,  .y1 = bar_y1,
-                .x2 = obj->area.x2 - obj->border,  .y2 = obj->area.y2 - obj->border,
-            };
-            sgl_area_t bar_rect = {
-                .x1 = obj->coords.x1 + obj->border, .y1 = bar_y1 - obj->radius - obj->border,
-                .x2 = obj->coords.x2 - obj->border, .y2 = obj->coords.y2 - obj->border,
-            };
-            sgl_draw_fill_rect(surf, &bar_area, &bar_rect, obj->radius,
-                               fd->path_color, fd->alpha);
+        sgl_draw_fill_rect(surf, &bar_area, &bar_rect, obj->radius,
+                           fd->path_color, fd->alpha);
 
-            if (!sgl_filedialog_is_root(fd) && fd->selected != NULL &&
-                fd->selected->text[0] != '\0') {
-                sgl_draw_string(surf, &bar_area,
-                                bar_area.x1 + obj->radius + SGL_FILEDIALOG_ITEM_PAD,
-                                bar_y1 + (bar_h - sgl_font_get_height(fd->font)) / 2,
-                                fd->selected->text, fd->item_text_color, fd->alpha, fd->font);
-            }
-
-            sgl_area_t ok_rect;
-            sgl_filedialog_ok_rect(fd, obj, list_y2, &ok_rect);
-            const bool can_ok = sgl_filedialog_can_confirm(fd);
-            sgl_draw_fill_rect(surf, &bar_area, &ok_rect, 4,
-                               can_ok ? fd->btn_color : fd->btn_disabled_color, fd->alpha);
-            {
-                const int tw = sgl_font_get_string_width(SGL_FILEDIALOG_OK_TEXT, fd->font);
-                const int th = sgl_font_get_height(fd->font);
-                sgl_draw_string(surf, &bar_area,
-                                ok_rect.x1 + (ok_rect.x2 - ok_rect.x1 - tw) / 2,
-                                ok_rect.y1 + (ok_rect.y2 - ok_rect.y1 - th + 1) / 2,
-                                SGL_FILEDIALOG_OK_TEXT, fd->item_text_color, fd->alpha, fd->font);
-            }
+        if (!sgl_filedialog_is_root(fd) && fd->selected != NULL &&
+            fd->selected->text[0] != '\0') {
+            sgl_draw_string(surf, &bar_area,
+                            bar_area.x1 + obj->radius + SGL_FILEDIALOG_ITEM_PAD,
+                            bar_y1 + (bar_h - sgl_font_get_height(fd->font)) / 2,
+                            fd->selected->text, fd->item_text_color, fd->alpha, fd->font);
         }
+
+        sgl_filedialog_ok_rect(fd, obj, list_y2, &ok_rect);
+        sgl_draw_fill_rect(surf, &bar_area, &ok_rect, 4,
+                           can_ok ? fd->btn_color : fd->btn_disabled_color, fd->alpha);
+        sgl_draw_string(surf, &bar_area,
+                        ok_rect.x1 + (ok_rect.x2 - ok_rect.x1 - ok_text_w) / 2,
+                        ok_rect.y1 + (ok_rect.y2 - ok_rect.y1 - ok_text_h + 1) / 2,
+                        SGL_FILEDIALOG_OK_TEXT, fd->item_text_color, fd->alpha, fd->font);
 
         /* --- entry list --- */
         const int32_t max_scroll = sgl_filedialog_max_scroll(fd, obj, item_height, list_h);
@@ -1073,13 +1055,12 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
     }
 }
 
-/* ------------------------------------------------------------------------- */
-/* Public API                                                                */
-/* ------------------------------------------------------------------------- */
-
 static sgl_obj_t *sgl_filedialog_create(sgl_obj_t *parent, const char *dev_name, uint8_t mode)
 {
     sgl_filedialog_t *fd = sgl_malloc(sizeof(sgl_filedialog_t));
+    int16_t w, h;
+    const char *mount;
+
     if (fd == NULL) {
         SGL_LOG_ERROR("sgl_filedialog_create: malloc failed");
         return NULL;
@@ -1095,6 +1076,7 @@ static sgl_obj_t *sgl_filedialog_create(sgl_obj_t *parent, const char *dev_name,
 
     fd->mode                = mode;
     fd->selected            = &fd->selected_item;
+    sgl_snprintf(fd->root_text, sizeof(fd->root_text), "%s", SGL_FILEDIALOG_ROOT_TEXT);
     fd->font                = sgl_get_system_font();
     fd->icon_font           = NULL;   /* NULL = draw icons with the text font */
     fd->alpha               = SGL_THEME_ALPHA;
@@ -1121,25 +1103,21 @@ static sgl_obj_t *sgl_filedialog_create(sgl_obj_t *parent, const char *dev_name,
 
     /* default geometry: centered 3/4 of the screen; the caller may override
      * with sgl_obj_set_pos()/sgl_obj_set_size() */
-    {
-        int16_t w = (int16_t)(SGL_SCREEN_WIDTH * 3 / 4);
-        int16_t h = (int16_t)(SGL_SCREEN_HEIGHT * 3 / 4);
-        sgl_obj_set_size(&fd->obj, w, h);
-        sgl_obj_set_pos(&fd->obj,
-                        (int16_t)((SGL_SCREEN_WIDTH - w) / 2),
-                        (int16_t)((SGL_SCREEN_HEIGHT - h) / 2));
-    }
+    w = (int16_t)(SGL_SCREEN_WIDTH * 3 / 4);
+    h = (int16_t)(SGL_SCREEN_HEIGHT * 3 / 4);
+    sgl_obj_set_size(&fd->obj, w, h);
+    sgl_obj_set_pos(&fd->obj,
+                    (int16_t)((SGL_SCREEN_WIDTH - w) / 2),
+                    (int16_t)((SGL_SCREEN_HEIGHT - h) / 2));
 
     /* dev_name == NULL (or unmounted) opens on the virtual "/" root, which
      * lists every mounted block device, same as the file browser */
-    {
-        const char *mount = (dev_name != NULL) ? sgl_fs_mount_find(dev_name) : NULL;
-        if (dev_name != NULL && mount == NULL) {
-            SGL_LOG_WARN("sgl_filedialog: device '%s' not mounted, showing device list",
-                         dev_name);
-        }
-        sgl_filedialog_load_dir(fd, mount != NULL ? mount : "/");
+    mount = (dev_name != NULL) ? sgl_fs_mount_find(dev_name) : NULL;
+    if (dev_name != NULL && mount == NULL) {
+        SGL_LOG_WARN("sgl_filedialog: device '%s' not mounted, showing device list",
+                     dev_name);
     }
+    sgl_filedialog_load_dir(fd, mount != NULL ? mount : "/");
 
     return &fd->obj;
 }
@@ -1168,6 +1146,19 @@ void sgl_filedialog_set_confirm_cb(sgl_obj_t *obj, sgl_filedialog_cb_t cb, void 
     sgl_filedialog_t *fd = sgl_container_of(obj, sgl_filedialog_t, obj);
     fd->confirm_cb  = cb;
     fd->cb_user_data = user_data;
+}
+
+/**
+ * @brief Set the label shown in the title bar on the virtual "/" root
+ */
+void sgl_filedialog_set_root_text(sgl_obj_t *obj, const char *text)
+{
+    sgl_filedialog_t *fd = sgl_container_of(obj, sgl_filedialog_t, obj);
+
+    if (text == NULL || text[0] == '\0') text = SGL_FILEDIALOG_ROOT_TEXT;
+    strncpy(fd->root_text, text, sizeof(fd->root_text) - 1);
+    fd->root_text[sizeof(fd->root_text) - 1] = '\0';
+    sgl_obj_set_dirty(obj);
 }
 
 /**

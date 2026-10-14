@@ -106,4 +106,5 @@ void sgl_filebrowser_examples(sgl_obj_t *parent)
     sgl_filebrowser_set_text_font(fb, &consolas14);
     sgl_filebrowser_set_icon_font(fb, &sgl_icon_fontawesome14);
     sgl_filebrowser_set_icons(fb, g_filebrowser_icons);
+    sgl_filebrowser_set_root_text(fb, "Devices");
 }

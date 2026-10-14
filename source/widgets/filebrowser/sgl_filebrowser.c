@@ -36,6 +36,7 @@
 #define SGL_FILEBROWSER_ITEM_PAD         (3)
 #define SGL_FILEBROWSER_ITEM_SPACE       (6)
 #define SGL_FILEBROWSER_PARENT_NAME      ".."
+#define SGL_FILEBROWSER_ROOT_TEXT        "DISK" /* default title on the "/" root */
 
 /* rounded row card style, same scheme as sgl_menu / sgl_filedialog */
 #define SGL_FILEBROWSER_CARD_VMARGIN     (1)   /* gap between card and row edge  */
@@ -48,6 +49,14 @@
 static inline bool sgl_filebrowser_is_root(const sgl_filebrowser_t *fb)
 {
     return fb->current_path[0] == '/' && fb->current_path[1] == '\0';
+}
+
+/* Title bar text: on the virtual "/" root the real path would read as a bare
+ * "/", so the user-set label is shown instead ("DISK" when none was set);
+ * every other directory simply shows its path. */
+static inline const char *sgl_filebrowser_title_text(const sgl_filebrowser_t *fb)
+{
+    return sgl_filebrowser_is_root(fb) ? fb->root_text : fb->current_path;
 }
 
 static inline bool sgl_filebrowser_is_valid_dir_entry(const char *name)
@@ -631,9 +640,9 @@ static void sgl_filebrowser_draw_path_bar(sgl_surf_t *surf, sgl_filebrowser_t *f
         .x2 = obj->coords.x2 - obj->border, .y2 = path_y2 + obj->radius + obj->border,
     };
     sgl_draw_fill_rect(surf, &path_area, &path_rect, obj->radius, fb->path_color, fb->alpha);
-    sgl_draw_string(surf, &obj->area, path_rect.x1 + obj->radius + SGL_FILEBROWSER_ITEM_PAD,
+    sgl_draw_string(surf, &obj->area, path_rect.x1 + obj->radius + 2 * SGL_FILEBROWSER_ITEM_PAD,
                     path_y1 + (bar_h - sgl_font_get_height(fb->font)) / 2,
-                    fb->current_path, fb->item_text_color, fb->alpha, fb->font);
+                    sgl_filebrowser_title_text(fb), fb->item_text_color, fb->alpha, fb->font);
 }
 
 static void sgl_filebrowser_visible_range(const sgl_filebrowser_t *fb, sgl_obj_t *obj, int item_height,
@@ -981,6 +990,7 @@ sgl_obj_t* sgl_filebrowser_create(sgl_obj_t *parent)
     fb->sc.bar_alpha         = 200;
     sgl_scroll_reset(&fb->sc);
     strcpy(fb->current_path, "/");
+    sgl_snprintf(fb->root_text, sizeof(fb->root_text), "%s", SGL_FILEBROWSER_ROOT_TEXT);
     sgl_filebrowser_load_dir(fb, "/");
     return &fb->obj;
 }
@@ -1193,6 +1203,19 @@ void sgl_filebrowser_set_sel_style(sgl_obj_t *obj, sgl_color_t sel_color, sgl_co
     fb->item_selected_color = sel_color;
     fb->sel_border_color    = sel_border_color;
     fb->card_border_w       = border_width;
+    sgl_obj_set_dirty(obj);
+}
+
+/**
+ * @brief Set the label shown in the title bar on the virtual "/" root
+ */
+void sgl_filebrowser_set_root_text(sgl_obj_t *obj, const char *text)
+{
+    sgl_filebrowser_t *fb = sgl_container_of(obj, sgl_filebrowser_t, obj);
+
+    if (text == NULL || text[0] == '\0') text = SGL_FILEBROWSER_ROOT_TEXT;
+    strncpy(fb->root_text, text, sizeof(fb->root_text) - 1);
+    fb->root_text[sizeof(fb->root_text) - 1] = '\0';
     sgl_obj_set_dirty(obj);
 }
 

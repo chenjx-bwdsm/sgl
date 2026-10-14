@@ -111,6 +111,10 @@ set(SGL_INCLUDE_DIRS
 include_directories(${SGL_INCLUDE_DIRS})
 include(${SGL_SOURCE_PATH}/build.cmake)
 
+# Expose the example registry (SGL_EXAMPLE_SOURCE / sgl_examples_select()) so a
+# downstream project can build any widget demo without knowing the file layout.
+include(${SGL_ROOT_PATH}/examples/build.cmake)
+
 configure_file(
     ${SGL_MODULE_PATH}/config.h.in
     ${SGL_GENERATED_PATH}/sgl_config.h

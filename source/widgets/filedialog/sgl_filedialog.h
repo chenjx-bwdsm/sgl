@@ -45,6 +45,11 @@
  *   Like the file browser, the virtual "/" root lists every mounted block
  *   device by name (with its free/total capacity); entering a device that way
  *   and stepping back up with ".." returns to the device list.
+ *
+ *   While the device list is open the title bar shows a label instead of the
+ *   bare "/" path: "DISK" by default, or whatever
+ *   sgl_filedialog_set_root_text() was given. Any other directory keeps
+ *   showing its own path.
  */
 #ifndef __SGL_FILEDIALOG_H__
 #define __SGL_FILEDIALOG_H__
@@ -59,6 +64,10 @@ extern "C" {
 
 #define SGL_FILEDIALOG_PATH_MAX_LEN   (SGL_FILEBROWSER_PATH_MAX_LEN)
 #define SGL_FILEDIALOG_NAME_MAX_LEN   (SGL_FILEBROWSER_NAME_MAX_LEN)
+
+/* Title bar label shown on the virtual "/" root, where the real path would
+ * read as a bare "/" (see sgl_filedialog_set_root_text) */
+#define SGL_FILEDIALOG_ROOT_TEXT_MAX_LEN  (32)
 
 /* Cache sizing, same sliding-window scheme as the file browser. */
 #ifndef SGL_FILEDIALOG_CACHE_MULT
@@ -134,6 +143,7 @@ typedef struct sgl_filedialog {
     sgl_scroll_t sc;
 
     char current_path[SGL_FILEDIALOG_PATH_MAX_LEN];
+    char root_text[SGL_FILEDIALOG_ROOT_TEXT_MAX_LEN]; /* title on the "/" root */
     char result_path[SGL_FILEDIALOG_PATH_MAX_LEN];
 } sgl_filedialog_t;
 
@@ -164,6 +174,17 @@ sgl_obj_t *sgl_filedialog_open_dir(sgl_obj_t *parent, const char *dev_name);
  * @return none
  */
 void sgl_filedialog_set_confirm_cb(sgl_obj_t *obj, sgl_filedialog_cb_t cb, void *user_data);
+
+/**
+ * @brief Set the label shown in the title bar on the virtual "/" root
+ * @param obj: dialog object
+ * @param text: label to show while the device list is open (e.g. "DISK").
+ *              NULL or an empty string restores the default "DISK"
+ * @return none
+ * @note the real path ("/") is never shown at the root; every other directory
+ *       still shows its own path, exactly as before
+ */
+void sgl_filedialog_set_root_text(sgl_obj_t *obj, const char *text);
 
 /**
  * @brief Set the text font of the dialog
