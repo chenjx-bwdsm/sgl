@@ -908,6 +908,7 @@ static void sgl_filebrowser_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_e
     }
     break;
 
+    case SGL_EVENT_KEY_LEFT:
     case SGL_EVENT_KEY_DOWN: {
         /* with nothing selected yet, the first key press starts at the top */
         const int16_t target = (fb->item_selected < 0)
@@ -922,6 +923,7 @@ static void sgl_filebrowser_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_e
     }
     break;
 
+    case SGL_EVENT_KEY_RIGHT:
     case SGL_EVENT_KEY_UP: {
         const int16_t target = (fb->item_selected < 0)
                                ? 0 : (int16_t)(fb->item_selected - 1);

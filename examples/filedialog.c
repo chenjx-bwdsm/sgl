@@ -26,6 +26,13 @@ static sgl_block_dev_t g_filedialog_dev_flash = { .info = &g_filedialog_flash_in
 static sgl_obj_t *g_filedialog_status;
 static char g_filedialog_status_text[160];
 
+/* Key group for the physical keys.  The dialog is the only member: it is added
+ * when it opens and removed again from the confirm callback, which runs right
+ * before the widget destroys itself -- leaving it in the group would mean
+ * keeping a pointer to freed memory.  With no dialog open the group is empty
+ * and the arrow keys are simply inert. */
+static sgl_key_group_t *g_filedialog_keys = NULL;
+
 static void sgl_filedialog_example_status(const char *text)
 {
     sgl_snprintf(g_filedialog_status_text, sizeof(g_filedialog_status_text),
@@ -46,8 +53,12 @@ static void sgl_filedialog_example_seed(const char *path, const char *content)
 
 static void sgl_filedialog_example_confirm(sgl_obj_t *dialog, const char *path, void *user_data)
 {
-    SGL_UNUSED(dialog);
     SGL_UNUSED(user_data);
+
+    /* drop the dialog from the key group before it destroys itself */
+    if (g_filedialog_keys != NULL) {
+        sgl_key_group_remove_obj(g_filedialog_keys, dialog);
+    }
 
     if (path != NULL) {
         char text[160];
@@ -103,6 +114,19 @@ static void sgl_filedialog_example_setup(sgl_obj_t *dlg)
     sgl_filedialog_set_icon_font(dlg, &sgl_icon_fontawesome14);
     sgl_filedialog_set_icons(dlg, g_filedialog_icons);
     sgl_filedialog_set_confirm_cb(dlg, sgl_filedialog_example_confirm, NULL);
+
+    /* the virtual "/" device list gets a custom title; without this call it
+     * would show the built-in default, "DISK" */
+    sgl_filedialog_set_root_text(dlg, "Storage");
+
+    /* make the new dialog reachable by the physical keys */
+    if (g_filedialog_keys == NULL) {
+        g_filedialog_keys = sgl_key_group_create(1);
+    }
+    if (g_filedialog_keys != NULL) {
+        sgl_key_group_add_obj(g_filedialog_keys, dlg);
+        sgl_key_group_load(g_filedialog_keys);
+    }
 }
 
 static void sgl_filedialog_example_open_file_cb(sgl_event_t *event)
@@ -214,4 +238,26 @@ void sgl_filedialog_examples(sgl_obj_t *parent)
     sgl_label_set_font(g_filedialog_status, &consolas14);
     sgl_label_set_text_color(g_filedialog_status, sgl_rgb(40, 40, 40));
     sgl_filedialog_example_status("click a button to open the file dialog");
+
+    /* on-screen hints for the manual test */
+    sgl_obj_t *hint1 = sgl_label_create(NULL);
+    sgl_obj_set_pos(hint1, 20, 320);
+    sgl_obj_set_size(hint1, 700, 20);
+    sgl_label_set_font(hint1, &consolas14);
+    sgl_label_set_text_color(hint1, sgl_rgb(120, 120, 120));
+    sgl_label_set_text(hint1, "mouse: click a button to open, click a row twice to enter / pick, X to close");
+
+    sgl_obj_t *hint2 = sgl_label_create(NULL);
+    sgl_obj_set_pos(hint2, 20, 344);
+    sgl_obj_set_size(hint2, 700, 20);
+    sgl_label_set_font(hint2, &consolas14);
+    sgl_label_set_text_color(hint2, sgl_rgb(120, 120, 120));
+    sgl_label_set_text(hint2, "keys: arrow keys move the selection, ENTER picks, ESC cancels");
+
+    sgl_obj_t *hint3 = sgl_label_create(NULL);
+    sgl_obj_set_pos(hint3, 20, 368);
+    sgl_obj_set_size(hint3, 700, 20);
+    sgl_label_set_font(hint3, &consolas14);
+    sgl_label_set_text_color(hint3, sgl_rgb(120, 120, 120));
+    sgl_label_set_text(hint3, "the virtual \"/\" device list title is set by sgl_filedialog_set_root_text()");
 }

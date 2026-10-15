@@ -76,7 +76,7 @@ void* sgl_malloc(size_t size);
  * @param  size   request size of memory
  * @return point to request memory address
 */
-static void* sgl_zalloc(size_t size)
+static inline void* sgl_zalloc(size_t size)
 {
     void *p = sgl_malloc(size);
     if (p) {

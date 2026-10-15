@@ -14,7 +14,6 @@ void sgl_progress_examples(sgl_obj_t *parent)
 {
     sgl_obj_t *progress1;
     sgl_obj_t *progress2;
-    sgl_obj_t *progress3;
     
     /* Create first progress - horizontal loading bar */
     progress1 = sgl_progress_create(parent);

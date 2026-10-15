@@ -173,8 +173,6 @@ static void sgl_dropdown_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_even
 
         if (dropdown->is_open) {
             const int16_t text_pos_x1 = obj->coords.x1 + item_pad;
-            const int16_t text_pos_x2 = obj->coords.x2 - item_pad;
-            const int16_t hline_h = item_height - SGL_DROPDOWN_OPTION_SPACE;
 
             bg_coords.y1 = obj->coords.y1 + dropdown->option_h + 1;
             bg_coords.y2 = bg_coords.y1 + visible_items * item_height - 1;

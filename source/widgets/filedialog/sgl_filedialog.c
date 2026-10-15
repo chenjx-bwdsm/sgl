@@ -1014,6 +1014,7 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
     }
     break;
 
+    case SGL_EVENT_KEY_LEFT:
     case SGL_EVENT_KEY_DOWN: {
         /* with nothing selected yet, the first key press starts at the top */
         const int16_t target = (fd->item_selected < 0)
@@ -1028,6 +1029,7 @@ static void sgl_filedialog_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_ev
     }
     break;
 
+    case SGL_EVENT_KEY_RIGHT:
     case SGL_EVENT_KEY_UP: {
         const int16_t target = (fd->item_selected < 0)
                                ? 0 : (int16_t)(fd->item_selected - 1);

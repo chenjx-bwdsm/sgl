@@ -116,9 +116,7 @@ static void sgl_textlist_construct_cb(sgl_surf_t *surf, sgl_obj_t* obj, sgl_even
     case SGL_EVENT_DRAW_MAIN: {
         const int item_pad = sgl_max(obj->radius, obj->border + SGL_TEXTLIST_ITEM_PAD);
         const int16_t text_pos_x1 = obj->coords.x1 + item_pad;
-        const int16_t text_pos_x2 = obj->coords.x2 - item_pad;
         int16_t text_pos_y =  obj->coords.y1 + SGL_TEXTLIST_ITEM_SPACE;
-        const int16_t hline_h = item_height - SGL_TEXTLIST_ITEM_SPACE;
 
         int item_idx = 0;
         sgl_area_t select = {

@@ -2218,12 +2218,8 @@ void sgl_monitor_trace(sgl_surf_t *surf)
         .y1 = SGL_MONITOR_COORDS_Y,
         .y2 = SGL_MONITOR_COORDS_Y + SGL_MONITOR_COORDS_HEIGHT - 1,
     };
-    sgl_event_t evt = {0};
-    sgl_obj_t *child;
     static char fps_str[16] = {0};
     static char mem_str[16] = {0};
-    static sgl_obj_t *fps = NULL;
-    static sgl_obj_t *mem = NULL;
     static sgl_monitor_fps_t fps_calc = {0};
 
     uint32_t tick_used = cur_tick - fps_calc.last_tick;

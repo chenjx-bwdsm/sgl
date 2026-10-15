@@ -135,7 +135,6 @@ static void sgl_span_draw_clip(sgl_surf_t *surf, sgl_obj_t *obj, sgl_area_t *cli
 {
     sgl_span_t *span = sgl_container_of(obj, sgl_span_t, obj);
     int16_t obj_w = sgl_obj_get_width(obj);
-    int16_t obj_h = sgl_obj_get_height(obj);
     int16_t start_x = obj->coords.x1;
     int16_t start_y = obj->coords.y1;
     
@@ -177,7 +176,6 @@ static void sgl_span_draw_clip(sgl_surf_t *surf, sgl_obj_t *obj, sgl_area_t *cli
 static void sgl_span_draw_wrap(sgl_surf_t *surf, sgl_obj_t *obj, sgl_area_t *clip)
 {
     sgl_span_t *span = sgl_container_of(obj, sgl_span_t, obj);
-    int16_t obj_w = sgl_obj_get_width(obj);
     int16_t cur_x = obj->coords.x1 + span->indent;
     int16_t cur_y = obj->coords.y1;
     int16_t line_height = span->max_line_height;
@@ -236,7 +234,6 @@ static void sgl_span_draw_wrap(sgl_surf_t *surf, sgl_obj_t *obj, sgl_area_t *cli
 static void sgl_span_draw_scroll(sgl_surf_t *surf, sgl_obj_t *obj, sgl_area_t *clip)
 {
     sgl_span_t *span = sgl_container_of(obj, sgl_span_t, obj);
-    int16_t obj_w = sgl_obj_get_width(obj);
     int16_t start_x = obj->coords.x1 - span->scroll_offset;
     int16_t start_y = obj->coords.y1;
     

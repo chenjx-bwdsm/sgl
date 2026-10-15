@@ -77,7 +77,6 @@ static void spin_timer_cb(const sgl_timer_t *timer, void *user_data)
  */
 void sgl_img_ext_examples(sgl_obj_t *parent)
 {
-    sgl_obj_t *img;
     sgl_timer_t *spin_timer;
 
     spin_img = sgl_img_ext_create(parent);

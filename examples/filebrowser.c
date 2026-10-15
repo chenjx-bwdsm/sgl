@@ -23,6 +23,11 @@ static sgl_block_dev_t g_sd_dev    = { .info = &g_sd_info };
 static sgl_ramfs_config_t g_flash_cfg = { .max_size =  2 * 1024 * 1024 }; /* 2 MB  */
 static sgl_ramfs_config_t g_sd_cfg     = { .max_size = 16 * 1024 * 1024 }; /* 16 MB */
 
+/* Key group holding the browser.  Unlike the file dialog the browser is not
+ * modal and never destroys itself, so it can stay registered for the whole
+ * demo -- no stale pointer to worry about. */
+static sgl_key_group_t *g_filebrowser_keys = NULL;
+
 static void seed_file(const char *path, const char *content)
 {
     int fd = sgl_fs_open(path, SGL_O_RDWR | SGL_O_CREAT | SGL_O_TRUNC);
@@ -107,4 +112,28 @@ void sgl_filebrowser_examples(sgl_obj_t *parent)
     sgl_filebrowser_set_icon_font(fb, &sgl_icon_fontawesome14);
     sgl_filebrowser_set_icons(fb, g_filebrowser_icons);
     sgl_filebrowser_set_root_text(fb, "Devices");
+
+    /* 3. make the browser reachable by the physical keys: arrow keys move the
+     *    highlight, ENTER activates a row (a directory needs two presses: the
+     *    first highlights it, the second enters it) */
+    g_filebrowser_keys = sgl_key_group_create(1);
+    if (g_filebrowser_keys != NULL) {
+        sgl_key_group_add_obj(g_filebrowser_keys, fb);
+        sgl_key_group_load(g_filebrowser_keys);
+    }
+
+    /* 4. on-screen hints for the manual test */
+    sgl_obj_t *hint1 = sgl_label_create(parent);
+    sgl_obj_set_pos(hint1, 20, 320);
+    sgl_obj_set_size(hint1, 340, 20);
+    sgl_label_set_font(hint1, &consolas14);
+    sgl_label_set_text_color(hint1, sgl_rgb(120, 120, 120));
+    sgl_label_set_text(hint1, "mouse: click a device to enter it");
+
+    sgl_obj_t *hint2 = sgl_label_create(parent);
+    sgl_obj_set_pos(hint2, 20, 344);
+    sgl_obj_set_size(hint2, 340, 20);
+    sgl_label_set_font(hint2, &consolas14);
+    sgl_label_set_text_color(hint2, sgl_rgb(120, 120, 120));
+    sgl_label_set_text(hint2, "keys: arrows move, ENTER activates");
 }

@@ -75,7 +75,10 @@ static sgl_key_group_t *key_grp_active = NULL;
 #define grp_active_get_focused()             (key_grp_active->obj[key_grp_active->focused])
 #define grp_active_is_editing()              (key_grp_active->editing)
 #define grp_active_is_pressed()              (key_grp_active->pressed)
-#define grp_active_is_focused()              (key_grp_active->focused != -1)
+/* a slot may be empty: sgl_key_group_remove_obj() clears it when the widget
+ * destroys itself (msgbox and friends), so "focused" alone is not enough */
+#define grp_active_is_focused()              (key_grp_active->focused != -1 && \
+                                              key_grp_active->obj[key_grp_active->focused] != NULL)
 #define grp_active_set_focused(index)        (key_grp_active->focused = index)
 #define grp_active_get_first()               (key_grp_active->obj[0])
 #define grp_active_get_last()                (key_grp_active->obj[key_grp_active->count - 1])
@@ -689,10 +692,12 @@ int sgl_key_group_remove_obj(sgl_key_group_t *group, struct sgl_obj *obj)
 
     for (int i = 0; i < group->count; i++) {
         if (group->obj[i] == obj) {
-            if (grp_active_get_focused() == obj) {
+            if (grp_active_is_focused() && grp_active_get_focused() == obj) {
                 key_grp_active->focused = grp_active_get_focused_prev();
                 key_grp_active->editing = 0;
-                event_set_focus(grp_active_get_focused(), true);
+                if (grp_active_is_focused()) {
+                    event_set_focus(grp_active_get_focused(), true);
+                }
             }
 
             group->obj[i] = NULL;
@@ -729,12 +734,22 @@ void sgl_key_group_load(sgl_key_group_t *group)
  */
 static bool sgl_key_ensure_focus(void)
 {
+    int16_t first;
+
     if (!key_grp_active || key_grp_active->count == 0) {
         return false;
     }
 
     if (!grp_active_is_focused()) {
-        key_grp_active->focused = 0;
+        /* the group may be empty (every member destroyed itself), in which
+         * case there is simply nothing to focus */
+        first = grp_active_get_focused_neighbor(true);
+        if (first < 0) {
+            key_grp_active->focused = -1;
+            return false;
+        }
+
+        key_grp_active->focused = first;
         event_set_focus(grp_active_get_focused(), true);
         return false;
     }
@@ -763,7 +778,9 @@ void sgl_key_navigate(sgl_event_type_t type, bool forward)
         key_grp_active->focused = forward
                                   ? grp_active_get_focused_next()
                                   : grp_active_get_focused_prev();
-        event_set_focus(grp_active_get_focused(), true);
+        if (grp_active_is_focused()) {
+            event_set_focus(grp_active_get_focused(), true);
+        }
     }
 }
 
@@ -810,6 +827,7 @@ void sgl_key_enter_released(void)
 {
     const uint32_t tick = sgl_tick_get();
     uint32_t duration;
+    sgl_obj_t *obj;
 
     if (!grp_active_is_focused()) return;
 
@@ -819,12 +837,20 @@ void sgl_key_enter_released(void)
                                       ? SGL_EVENT_LONG_CLICKED 
                                       : SGL_EVENT_CLICKED;
         sgl_event_t evt;
-        event_type_callback(grp_active_get_focused(), &evt, event_type);
-        event_type_callback(grp_active_get_focused(), &evt, SGL_EVENT_RELEASED);
+
+        obj = grp_active_get_focused();
+        event_type_callback(obj, &evt, event_type);
+
+        /* the widget may have taken itself out of the group while handling the
+         * click (a dialog that confirms and closes itself does exactly that),
+         * so only deliver RELEASED if it is still the focused member */
+        if (grp_active_is_focused() && grp_active_get_focused() == obj) {
+            event_type_callback(obj, &evt, SGL_EVENT_RELEASED);
+        }
         key_grp_active->pressed = 0;
 
         if (sgl_key_get_signal(&evt) == SGL_EVENT_DESTROYED) {
-            sgl_key_group_remove_obj(key_grp_active, grp_active_get_focused());
+            sgl_key_group_remove_obj(key_grp_active, obj);
         }
     }
 }
