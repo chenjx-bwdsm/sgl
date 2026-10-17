@@ -47,7 +47,7 @@
 #define FAT_ENTRY_END       0x00
 #define FAT_DIR_ENTRY_SIZE  32
 
-#define FAT_LFN_LAST         0x40
+#define FAT_LFN_LAST        0x40
 #define FAT_LFN_ATTR        0x0F
 #define FAT_LFN_NAME1_LEN   5
 #define FAT_LFN_NAME2_LEN   6
