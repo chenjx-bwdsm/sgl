@@ -50,14 +50,22 @@
 #define WINFS_O_APPEND O_APPEND
 #endif
 
-/* glibc's sys/stat.h does "#define st_mtime st_mtim.tv_sec", which would
- * textually rewrite sgl_stat_t member accesses below. Keep the sgl_stat_t
- * member literal and read the host struct via this accessor instead. */
+/* glibc and macOS define st_mtime as an object macro (expanding to
+ * st_mtim.tv_sec / st_mtimespec.tv_sec), which would textually rewrite
+ * sgl_stat_t member accesses below. Wrap the host-side access in a helper
+ * while the macro is still in effect, then remove the macro so the
+ * sgl_stat_t member keeps its literal name. */
+#ifndef _WIN32
 #ifdef st_mtime
+static time_t posixfs_host_stat_mtime(const struct stat *sb)
+{
+    return (time_t)sb->st_mtime;
+}
+#define POSIXFS_STAT_MTIME(st_)  posixfs_host_stat_mtime(st_)
 #undef st_mtime
-#define POSIX_STAT_MTIME(st_) ((st_)->st_mtim.tv_sec)
 #else
-#define POSIX_STAT_MTIME(st_) ((st_)->st_mtime)
+#define POSIXFS_STAT_MTIME(st_)  ((st_)->st_mtime)
+#endif
 #endif
 
 typedef struct {
@@ -284,7 +292,11 @@ static int winfs_stat(void *fs, const char *path, sgl_stat_t *st)
     memset(st, 0, sizeof(*st));
     st->st_mode = (sb.st_mode & S_IFDIR) ? SGL_S_IFDIR : SGL_S_IFREG;
     st->st_size = (uint32_t)sb.st_size;
-    st->st_mtime = (uint32_t)POSIX_STAT_MTIME(&sb);
+#ifdef _WIN32
+    st->st_mtime = (uint32_t)sb.st_mtime;
+#else
+    st->st_mtime = (uint32_t)POSIXFS_STAT_MTIME(&sb);
+#endif
     return SGL_FS_OK;
 }
 
