@@ -174,19 +174,10 @@ struct MJDEC {
 #define HUFF_MASK (HUFF_LEN - 1)
 #endif
 
-/*-----------------------------------------------*/
-/* Zigzag-order to raster-order conversion table */
-/*-----------------------------------------------*/
-
 static const uint8_t Zig[64] = {0,  1,  8,  16, 9,  2,  3,  10, 17, 24, 32, 25, 18, 11, 4,  5,
                                 12, 19, 26, 33, 40, 48, 41, 34, 27, 20, 13, 6,  7,  14, 21, 28,
                                 35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44, 51,
                                 58, 59, 52, 45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63};
-
-/*-------------------------------------------------*/
-/* Input scale factor of Arai algorithm            */
-/* (scaled up 16 bits for fixed point operations)  */
-/*-------------------------------------------------*/
 
 static const uint16_t Ipsf[64] = {
     /* See also aa_idct.png */
@@ -212,10 +203,6 @@ static const uint16_t Ipsf[64] = {
     (uint16_t)(0.38268 * 8192), (uint16_t)(0.36048 * 8192), (uint16_t)(0.32442 * 8192),
     (uint16_t)(0.27590 * 8192), (uint16_t)(0.21678 * 8192), (uint16_t)(0.14932 * 8192),
     (uint16_t)(0.07612 * 8192)};
-
-/*---------------------------------------------*/
-/* Conversion table for fast clipping process  */
-/*---------------------------------------------*/
 
 #if MJDEC_TBLCLIP
 
@@ -283,12 +270,7 @@ static uint8_t BYTECLIP(int val)
         return 255;
     return (uint8_t)val;
 }
-
 #endif
-
-/*-----------------------------------------------------------------------*/
-/* Allocate a memory block from memory pool                              */
-/*-----------------------------------------------------------------------*/
 
 static void *alloc_pool(/* Pointer to allocated memory block (NULL:no memory available) */
                         MJDEC *jd,   /* Pointer to the decompressor object */
@@ -307,10 +289,6 @@ static void *alloc_pool(/* Pointer to allocated memory block (NULL:no memory ava
 
     return (void *)rp; /* Return allocated memory block (NULL:no memory to allocate) */
 }
-
-/*-----------------------------------------------------------------------*/
-/* Create de-quantization and prescaling tables with a DQT segment       */
-/*-----------------------------------------------------------------------*/
 
 static MJRESULT create_qt_tbl(                     /* 0:OK, !0:Failed */
                               MJDEC *jd,           /* Pointer to the decompressor object */
@@ -344,10 +322,6 @@ static MJRESULT create_qt_tbl(                     /* 0:OK, !0:Failed */
 
     return MJDR_OK;
 }
-
-/*-----------------------------------------------------------------------*/
-/* Create huffman code tables with a DHT segment                         */
-/*-----------------------------------------------------------------------*/
 
 static MJRESULT create_huffman_tbl(                     /* 0:OK, !0:Failed */
                                    MJDEC *jd,           /* Pointer to the decompressor object */
@@ -451,10 +425,6 @@ static MJRESULT create_huffman_tbl(                     /* 0:OK, !0:Failed */
     return MJDR_OK;
 }
 
-/*-----------------------------------------------------------------------*/
-/* Extract a huffman decoded data from input stream                      */
-/*-----------------------------------------------------------------------*/
-
 static int huffext(                 /* >=0: decoded data, <0: error code */
                    MJDEC *jd,       /* Pointer to the decompressor object */
                    unsigned int id, /* Table ID (0:Y, 1:C) */
@@ -539,10 +509,6 @@ static int huffext(                 /* >=0: decoded data, <0: error code */
     return 0 - (int)MJDR_FMT1; /* Err: code not found (may be corrupted data) */
 }
 
-/*-----------------------------------------------------------------------*/
-/* Extract N bits from input stream                                      */
-/*-----------------------------------------------------------------------*/
-
 static int bitext(                  /* >=0: extracted data, <0: error code */
                   MJDEC *jd,        /* Pointer to the decompressor object */
                   unsigned int nbit /* Number of bits to extract (1 to 16) */
@@ -589,10 +555,6 @@ static int bitext(                  /* >=0: extracted data, <0: error code */
     return (int)(w >> ((wbit - nbit) % 32));
 }
 
-/*-----------------------------------------------------------------------*/
-/* Process restart interval                                              */
-/*-----------------------------------------------------------------------*/
-
 static MJRESULT mj_restart(MJDEC *jd,    /* Pointer to the decompressor object */
                            uint16_t rstn /* Expected restart sequence number */
 )
@@ -630,9 +592,6 @@ static MJRESULT mj_restart(MJDEC *jd,    /* Pointer to the decompressor object *
     jd->dcv[2] = jd->dcv[1] = jd->dcv[0] = 0; /* Reset DC offsets */
     return MJDR_OK;
 }
-
-/* Apply Inverse-DCT in Arai Algorithm (see also aa_idct.png)            */
-/*-----------------------------------------------------------------------*/
 
 static void
 block_idct(int32_t *src, /* Input block data (de-quantized and pre-scaled for Arai Algorithm) */
@@ -752,10 +711,6 @@ block_idct(int32_t *src, /* Input block data (de-quantized and pre-scaled for Ar
     }
 }
 
-/*-----------------------------------------------------------------------*/
-/* Load all blocks in an MCU into working buffer                         */
-/*-----------------------------------------------------------------------*/
-
 static MJRESULT mcu_load(MJDEC *jd /* Pointer to the decompressor object */
 )
 {
@@ -862,10 +817,6 @@ static int div_pow2_toward_zero(int value, unsigned int shift)
         return -((-value) >> shift);
     return value >> shift;
 }
-
-/*-----------------------------------------------------------------------*/
-/* Output an MCU: Convert YCbCr directly to RGB565                       */
-/*-----------------------------------------------------------------------*/
 
 static MJRESULT mcu_output(MJDEC *jd, /* Pointer to the decompressor object */
                            int (*outfunc)(MJDEC *, void *, MJRECT *), /* RGB output function */
@@ -1024,10 +975,6 @@ static MJRESULT mcu_output(MJDEC *jd, /* Pointer to the decompressor object */
     }
 
 }
-
-/*-----------------------------------------------------------------------*/
-/* Analyze the JPEG image and Initialize decompressor object             */
-/*-----------------------------------------------------------------------*/
 
 #define LDB_WORD(ptr)                                                                              \
     (uint16_t)(((uint16_t)*((uint8_t *)(ptr)) << 8) | (uint16_t)*(uint8_t *)((ptr) + 1))
@@ -1212,10 +1159,6 @@ static MJRESULT mj_prepare(MJDEC *jd, /* Blank decompressor object */
         }
     }
 }
-
-/*-----------------------------------------------------------------------*/
-/* Start to decompress the JPEG picture                                  */
-/*-----------------------------------------------------------------------*/
 
 static MJRESULT mj_decomp(MJDEC *jd, /* Initialized decompression object */
                           int (*outfunc)(MJDEC *, void *, MJRECT *), /* RGB output function */
@@ -1471,10 +1414,6 @@ static int32_t avi_pread(int fd, void *buf, int32_t offset, int32_t len)
     }
     return done;
 }
-
-/*--------------------------------------------------------------------------*/
-/* RIFF header parsing                                                      */
-/*--------------------------------------------------------------------------*/
 
 /**
  * @brief parse one "strl" list, detect the stream types and formats
@@ -2218,10 +2157,6 @@ static int avi_decode_next(sgl_avi_t *avi)
     return 0;
 }
 
-/*--------------------------------------------------------------------------*/
-/* Audio pump                                                               */
-/*--------------------------------------------------------------------------*/
-
 /**
  * @brief feed the audio device from the shared file descriptor. Walks the
  *        movi chunks forward, refilling the device buffer until full
@@ -2613,10 +2548,6 @@ static void avi_anim_restart(sgl_avi_t *avi)
                                    SGL_ANIM_PATH_LINEAR, NULL);
 }
 
-/*--------------------------------------------------------------------------*/
-/* Widget drawing                                                           */
-/*--------------------------------------------------------------------------*/
-
 /**
  * @brief blit the decoded pixmap into the surface, centered in the widget.
  *        Rows or columns outside the pixmap are painted black
@@ -2798,10 +2729,6 @@ static void avi_release_file(sgl_avi_t *avi)
     avi->pix_w = 0;
     avi->pix_h = 0;
 }
-
-/*--------------------------------------------------------------------------*/
-/* Public API                                                               */
-/*--------------------------------------------------------------------------*/
 
 /**
  * @brief create an AVI player object
