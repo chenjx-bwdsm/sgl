@@ -47,6 +47,7 @@
  */
 #include <sgl_cfgfix.h>
 #include <sgl_theme.h>
+#include <sgl_draw.h>
 #include "sgl_avi.h"
 
 /*===========================================================================*/
@@ -1361,6 +1362,78 @@ struct sgl_avi {
 static sgl_avi_audio_port_t g_audio_port;
 static uint8_t g_audio_port_ready;
 
+/* built-in "still busy" indicator for the blocking sgl_avi_load_file(): a
+ * thin slider sweeping back and forth over the widget. Like the LED widget
+ * it is painted inside the construct callback onto the surf handed over by
+ * the SGL draw pipeline; each index-read beat only marks the bar area dirty
+ * and pumps the pipeline once with sgl_task_handler_sync(). The slider
+ * position is time-driven, so the sweep speed is independent of the beat
+ * frequency */
+#define AVI_LOAD_BAR_W          240     /* track length (clipped to the widget) */
+#define AVI_LOAD_BAR_H          4       /* track thickness */
+#define AVI_LOAD_SEG_W          60      /* sweeping slider width */
+#define AVI_LOAD_SPEED          80      /* slider speed: pixels/second */
+#define AVI_LOAD_COLOR_TRACK    sgl_rgb(66, 66, 66)   /* dark gray groove */
+#define AVI_LOAD_COLOR_FILL     sgl_rgb(0, 255, 255)  /* cyan slider */
+
+static bool g_avi_loading;         /* set while load_file parses */
+static bool g_avi_load_bg_dirty;   /* the widget was invalidated once */
+static uint32_t g_avi_load_t0;
+
+/* sweep rectangles of the bar at the current moment */
+static bool avi_load_geom(const sgl_avi_t *avi, sgl_area_t *track, sgl_area_t *seg)
+{
+    int32_t x1 = avi->obj.coords.x1;
+    int32_t y1 = avi->obj.coords.y1;
+    int32_t w = avi->obj.coords.x2 - x1 + 1;
+    int32_t h = avi->obj.coords.y2 - y1 + 1;
+    int32_t bar_w = (w > AVI_LOAD_BAR_W) ? AVI_LOAD_BAR_W : w;
+    uint32_t span, phase, pos;
+    int32_t bx, by;
+
+    if (bar_w < AVI_LOAD_SEG_W + 2) {
+        return false;
+    }
+    /* triangle wave over the elapsed milliseconds: 0 -> span -> 0 sweep */
+    span = (uint32_t)(bar_w - AVI_LOAD_SEG_W);
+    phase = (sgl_tick_get() - g_avi_load_t0) * AVI_LOAD_SPEED / 1000u;
+    phase %= (2 * span);
+    pos = (phase <= span) ? phase : (2 * span - phase);
+    bx = x1 + (w - bar_w) / 2;          /* centered inside the widget */
+    by = y1 + (h - AVI_LOAD_BAR_H) / 2;
+
+    track->x1 = (int16_t)bx;
+    track->y1 = (int16_t)by;
+    track->x2 = (int16_t)(bx + bar_w - 1);
+    track->y2 = (int16_t)(by + AVI_LOAD_BAR_H - 1);
+    seg->x1 = (int16_t)(bx + pos);
+    seg->y1 = (int16_t)by;
+    seg->x2 = (int16_t)(bx + pos + AVI_LOAD_SEG_W - 2);
+    seg->y2 = (int16_t)(by + AVI_LOAD_BAR_H - 1);
+    return true;
+}
+
+/* one loading beat: mark an area dirty and run the regular SGL draw+flush
+ * pipeline once; the construct callback paints the bar into its surf */
+static void avi_load_beat(sgl_avi_t *avi)
+{
+    sgl_area_t track, seg, area;
+
+    if (!g_avi_loading) {
+        return;
+    }
+    if (!g_avi_load_bg_dirty) {
+        area = avi->obj.coords;        /* first beat: full widget incl. black bg */
+        g_avi_load_bg_dirty = true;
+    } else if (avi_load_geom(avi, &track, &seg)) {
+        area = track;                  /* later beats: only the thin groove */
+    } else {
+        return;
+    }
+    sgl_update_area(&area);
+    sgl_task_handler_sync();
+}
+
 static uint32_t avi_audio_consumed_bytes(void)
 {
     if (!g_audio_port_ready) {
@@ -1626,6 +1699,7 @@ static void avi_scan_idx(sgl_avi_t *avi, int32_t base)
         }
         remaining -= take;
         off += take * 16;
+        avi_load_beat(avi);
     }
     if (v_count == 0) {
         sgl_free(avi->vidx);
@@ -1687,6 +1761,7 @@ static void avi_scan_idx(sgl_avi_t *avi, int32_t base)
             }
             remaining -= take;
             off += take * 16;
+            avi_load_beat(avi);
         }
         aud_seen = aud_filled;
     }
@@ -2620,6 +2695,15 @@ static void sgl_avi_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_event_t *
                 buf += surf->w;
             }
         }
+        if (g_avi_loading) {
+            /* loading in progress: sweep the busy bar on top, straight into
+             * the surf like any other widget (all clipping is SGL's job) */
+            sgl_area_t track, seg;
+            if (avi_load_geom(avi, &track, &seg)) {
+                sgl_draw_fill_rect(surf, &clip, &track, 0, AVI_LOAD_COLOR_TRACK, SGL_ALPHA_MAX);
+                sgl_draw_fill_rect(surf, &clip, &seg, 0, AVI_LOAD_COLOR_FILL, SGL_ALPHA_MAX);
+            }
+        }
     } else if (evt->type == SGL_EVENT_DESTROYED) {
         avi->state = SGL_AVI_STATE_STOPPED;
         sgl_anim_delete_by_obj(obj);
@@ -2844,8 +2928,15 @@ int sgl_avi_load_file(sgl_obj_t *obj, const char *path)
     avi->movi_first = -1;
     avi->movi_end = avi->file_size;
 
+    /* the built-in busy bar is painted by the construct callback while the
+     * loading flag is set; enable it for this load pass */
+    g_avi_loading = true;
+    g_avi_load_bg_dirty = false;
+    g_avi_load_t0 = sgl_tick_get();
+
     if (avi_parse_header(avi) != 0) {
         SGL_LOG_ERROR("avi: bad AVI header");
+        g_avi_loading = false;
         avi_release_file(avi);
         return -1;
     }
@@ -2892,6 +2983,14 @@ int sgl_avi_load_file(sgl_obj_t *obj, const char *path)
     avi->show_frame = AVI_POS_NONE;
     avi->has_frame = 0;
     avi->frame_pending = 0;
+
+    /* loading over: repaint the whole widget (plain black) one last time */
+    g_avi_loading = false;
+    {
+        sgl_area_t area = avi->obj.coords;
+        sgl_update_area(&area);
+        sgl_task_handler_sync();
+    }
 
     SGL_LOG_INFO("avi: frames %d (idx %d x%d) fps %d audio %d size %d",
                  (int)avi_vidx_total(avi), (int)avi->vidx_count,
