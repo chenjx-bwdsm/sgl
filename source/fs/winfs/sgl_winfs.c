@@ -25,6 +25,12 @@
 #define WINFS_LSEEK(fd, offset, whence) _lseek(fd, offset, whence)
 #define WINFS_STAT(path, st) _stat(path, st)
 #define WINFS_MKDIR(path) _mkdir(path)
+#define WINFS_O_RDONLY _O_RDONLY
+#define WINFS_O_WRONLY _O_WRONLY
+#define WINFS_O_RDWR _O_RDWR
+#define WINFS_O_CREAT _O_CREAT
+#define WINFS_O_TRUNC _O_TRUNC
+#define WINFS_O_APPEND _O_APPEND
 #else
 #include <unistd.h>
 #include <sys/stat.h>
@@ -36,6 +42,22 @@
 #define WINFS_LSEEK(fd, offset, whence) lseek(fd, offset, whence)
 #define WINFS_STAT(path, st) stat(path, st)
 #define WINFS_MKDIR(path) mkdir(path, 0777)
+#define WINFS_O_RDONLY O_RDONLY
+#define WINFS_O_WRONLY O_WRONLY
+#define WINFS_O_RDWR O_RDWR
+#define WINFS_O_CREAT O_CREAT
+#define WINFS_O_TRUNC O_TRUNC
+#define WINFS_O_APPEND O_APPEND
+#endif
+
+/* glibc's sys/stat.h does "#define st_mtime st_mtim.tv_sec", which would
+ * textually rewrite sgl_stat_t member accesses below. Keep the sgl_stat_t
+ * member literal and read the host struct via this accessor instead. */
+#ifdef st_mtime
+#undef st_mtime
+#define POSIX_STAT_MTIME(st_) ((st_)->st_mtim.tv_sec)
+#else
+#define POSIX_STAT_MTIME(st_) ((st_)->st_mtime)
 #endif
 
 typedef struct {
@@ -123,21 +145,21 @@ static int winfs_open(void *fs, const char *path, uint32_t flags)
     winfs_normalize_path(path, ctx->base_dir, host_path, sizeof(host_path));
 
     if ((flags & SGL_O_RDWR) == SGL_O_RDWR) {
-        mode = _O_RDWR;
+        mode = WINFS_O_RDWR;
     } else if (flags & SGL_O_WRONLY) {
-        mode = _O_WRONLY;
+        mode = WINFS_O_WRONLY;
     } else {
-        mode = _O_RDONLY;
+        mode = WINFS_O_RDONLY;
     }
 
     if (flags & SGL_O_CREAT) {
-        mode |= _O_CREAT;
+        mode |= WINFS_O_CREAT;
     }
     if (flags & SGL_O_TRUNC) {
-        mode |= _O_TRUNC;
+        mode |= WINFS_O_TRUNC;
     }
     if (flags & SGL_O_APPEND) {
-        mode |= _O_APPEND;
+        mode |= WINFS_O_APPEND;
     }
 
     return WINFS_OPEN(host_path, mode);
@@ -262,7 +284,7 @@ static int winfs_stat(void *fs, const char *path, sgl_stat_t *st)
     memset(st, 0, sizeof(*st));
     st->st_mode = (sb.st_mode & S_IFDIR) ? SGL_S_IFDIR : SGL_S_IFREG;
     st->st_size = (uint32_t)sb.st_size;
-    st->st_mtime = (uint32_t)sb.st_mtime;
+    st->st_mtime = (uint32_t)POSIX_STAT_MTIME(&sb);
     return SGL_FS_OK;
 }
 

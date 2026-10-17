@@ -48,6 +48,16 @@ typedef struct _stat stdiofs_stat_t;
 typedef struct stat stdiofs_stat_t;
 #endif
 
+/* glibc's sys/stat.h does "#define st_mtime st_mtim.tv_sec", which would
+ * textually rewrite sgl_stat_t member accesses below. Keep the sgl_stat_t
+ * member literal and read the host struct via this accessor instead. */
+#ifdef st_mtime
+#undef st_mtime
+#define POSIX_STAT_MTIME(st_) ((st_)->st_mtim.tv_sec)
+#else
+#define POSIX_STAT_MTIME(st_) ((st_)->st_mtime)
+#endif
+
 #ifndef STDIOFS_MAX_FILES
 #define STDIOFS_MAX_FILES          8
 #endif
@@ -193,7 +203,7 @@ static int stdiofs_stat_impl(const char *npath, sgl_stat_t *st)
     st->st_mode = S_ISDIR(host_st.st_mode) ? SGL_S_IFDIR : SGL_S_IFREG;
 #endif
     st->st_size = (uint32_t)host_st.st_size;
-    st->st_mtime = (uint32_t)host_st.st_mtime;
+    st->st_mtime = (uint32_t)POSIX_STAT_MTIME(&host_st);
     return SGL_FS_OK;
 }
 
