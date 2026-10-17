@@ -173,11 +173,24 @@ sgl_obj_t* sgl_avi_create(sgl_obj_t *parent);
 int sgl_avi_set_audio_port(const sgl_avi_audio_port_t *port);
 
 /**
+ * @brief return codes of sgl_avi_load_file()
+ * @note any non zero value means nothing was loaded
+ */
+#define SGL_AVI_OK          0   /* stream parsed and ready to play */
+#define SGL_AVI_ERR_ARG    (-1) /* NULL object/path, or out of memory */
+#define SGL_AVI_ERR_IO     (-2) /* open / stat / read of the file failed */
+#define SGL_AVI_ERR_FORMAT (-3) /* not a RIFF "AVI " file, or no movi list */
+#define SGL_AVI_ERR_VCODEC (-4) /* AVI is fine but the video stream is not MJPEG */
+
+/**
  * @brief open an AVI file and parse its stream headers and indexes
  * @param obj AVI player object
  * @param path file path accessible through the mounted SGL filesystem
- * @return 0 on success, or -1 if the file cannot be opened or parsed
- * @note supports MJPEG video and optional uncompressed PCM audio
+ * @return SGL_AVI_OK on success, otherwise one of SGL_AVI_ERR_* above
+ * @note the video stream must be MJPEG (fourcc "MJPG"); other codecs
+ *       (H.264, DivX, raw RGB ...) return SGL_AVI_ERR_VCODEC
+ * @note audio is optional and must be uncompressed PCM; an unsupported audio
+ *       stream is not an error, the file just plays without sound
  */
 int sgl_avi_load_file(sgl_obj_t *obj, const char *path);
 

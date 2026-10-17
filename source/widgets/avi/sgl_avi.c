@@ -1297,6 +1297,8 @@ struct sgl_avi {
     int32_t movi_end;   /* offset just past the last movi chunk */
     uint32_t vflag;     /* video chunk fourcc, e.g. "00dc" */
     uint32_t aflag;     /* audio chunk fourcc, e.g. "01wb" */
+    uint32_t vcomp;     /* biCompression of the first video stream, 0 = none */
+    uint8_t vmjpg;      /* hdrl found a decodable MJPEG video stream */
 
     /* frame index */
     avi_vidx_t *vidx; /* frame index (from idx1), may be NULL */
@@ -1369,12 +1371,12 @@ static uint8_t g_audio_port_ready;
  * and pumps the pipeline once with sgl_task_handler_sync(). The slider
  * position is time-driven, so the sweep speed is independent of the beat
  * frequency */
-#define AVI_LOAD_BAR_W          240     /* track length (clipped to the widget) */
-#define AVI_LOAD_BAR_H          4       /* track thickness */
-#define AVI_LOAD_SEG_W          60      /* sweeping slider width */
-#define AVI_LOAD_SPEED          80      /* slider speed: pixels/second */
-#define AVI_LOAD_COLOR_TRACK    sgl_rgb(66, 66, 66)   /* dark gray groove */
-#define AVI_LOAD_COLOR_FILL     sgl_rgb(0, 255, 255)  /* cyan slider */
+#define AVI_LOAD_BAR_W         240     /* track length (clipped to the widget) */
+#define AVI_LOAD_BAR_H         4       /* track thickness */
+#define AVI_LOAD_SEG_W         60      /* sweeping slider width */
+#define AVI_LOAD_SPEED         80      /* slider speed: pixels/second */
+#define AVI_LOAD_COLOR_TRACK   sgl_rgb(66, 66, 66)   /* dark gray groove */
+#define AVI_LOAD_COLOR_FILL    sgl_rgb(0, 255, 255)  /* cyan slider */
 
 static bool g_avi_loading;         /* set while load_file parses */
 static bool g_avi_load_bg_dirty;   /* the widget was invalidated once */
@@ -1526,8 +1528,14 @@ static void avi_parse_strl(sgl_avi_t *avi, int32_t start, int32_t end, int strea
                 /* bitmapinfoheader: biCompression at +16 */
                 if (avi_pread(avi->fd, buf, pos + 8, 20) == 20) {
                     uint32_t comp = avi_rd32(buf + 16);
+
+                    /* keep the first codec seen, for the error report */
+                    if (avi->vcomp == 0) {
+                        avi->vcomp = (comp != 0u) ? comp : strh_handler;
+                    }
                     /* only MJPG (handler or bi compression) is decodable */
                     if (strh_handler == CC_MJPG || comp == CC_MJPG) {
+                        avi->vmjpg = 1;
                         avi->vflag = (stream_no == 0) ? CC_00DC : CC_01DC;
                         avi->aflag = (stream_no == 0) ? CC_01WB : CC_00WB;
                     }
@@ -1549,6 +1557,10 @@ static void avi_parse_strl(sgl_avi_t *avi, int32_t start, int32_t end, int strea
                         avi->audio_align = (uint8_t)align;
                         avi->audio_rate = rate;
                         avi->aflag = (stream_no == 0) ? CC_00WB : CC_01WB;
+                    } else {
+                        /* not fatal: the file still plays, just silently */
+                        SGL_LOG_WARN("avi: audio not PCM (fmt %x ch %d bits %d rate %d), muted",
+                                     (unsigned)fmt_tag, (int)channels, (int)bits, (int)rate);
                     }
                 }
             }
@@ -1809,7 +1821,8 @@ static void avi_probe_offsets(sgl_avi_t *avi)
 /**
  * @brief walk the top level RIFF chunks: parse hdrl, locate movi,
  *        then build the indexes
- * @return 0 on success, -1 on a malformed file
+ * @return SGL_AVI_OK on success, otherwise SGL_AVI_ERR_IO, SGL_AVI_ERR_FORMAT
+ *         or SGL_AVI_ERR_VCODEC
  */
 static int avi_parse_header(sgl_avi_t *avi)
 {
@@ -1820,7 +1833,7 @@ static int avi_parse_header(sgl_avi_t *avi)
 
     if (avi_pread(avi->fd, hdr, 0, 12) != 12) {
         SGL_LOG_ERROR("avi: header read failed");
-        return -1;
+        return SGL_AVI_ERR_IO;
     }
     if (avi_rd32(hdr) != CC_RIFF || avi_rd32(hdr + 8) != CC_AVIF) {
         /* print the actual signature: 0xE0FFD8FF = raw JPEG stream (the
@@ -1828,7 +1841,7 @@ static int avi_parse_header(sgl_avi_t *avi)
         SGL_LOG_ERROR("avi: not RIFF/AVI, got '%c%c%c%c' '%c%c%c%c' (%x %x)", hdr[0], hdr[1],
                       hdr[2], hdr[3], hdr[8], hdr[9], hdr[10], hdr[11], avi_rd32(hdr),
                       avi_rd32(hdr + 8));
-        return -1;
+        return SGL_AVI_ERR_FORMAT;
     }
 
     riff_size = avi_rd32(hdr + 4);
@@ -1872,7 +1885,22 @@ static int avi_parse_header(sgl_avi_t *avi)
 
     if (avi->movi_first < 0 || avi->movi_first >= avi->movi_end) {
         SGL_LOG_ERROR("avi: movi LIST not found (stopped at %x id %x)", pos, id);
-        return -1;
+        return SGL_AVI_ERR_FORMAT;
+    }
+
+    /* codec gate: done right after hdrl so an undecodable file is rejected
+     * before the slow idx1 scan below. the widget only decodes baseline
+     * JPEG frames, anything else (H264, DIVX, raw DIB ...) is hopeless */
+    if (!avi->vmjpg) {
+        if (avi->vcomp != 0u) {
+            SGL_LOG_ERROR("avi: video codec '%c%c%c%c' (%x) unsupported, need MJPG",
+                          (int)(avi->vcomp & 0xffu), (int)((avi->vcomp >> 8) & 0xffu),
+                          (int)((avi->vcomp >> 16) & 0xffu), (int)((avi->vcomp >> 24) & 0xffu),
+                          (unsigned)avi->vcomp);
+        } else {
+            SGL_LOG_ERROR("avi: no video stream found in hdrl");
+        }
+        return SGL_AVI_ERR_VCODEC;
     }
 
     /* idx1 offsets are relative to the "movi" fourcc (pos + 8 above) */
@@ -1892,7 +1920,7 @@ static int avi_parse_header(sgl_avi_t *avi)
     if (avi->movi_end > avi->file_size) {
         avi->movi_end = avi->file_size;
     }
-    return 0;
+    return SGL_AVI_OK;
 }
 
 /**
@@ -2884,22 +2912,23 @@ int sgl_avi_load_file(sgl_obj_t *obj, const char *path)
     char *copy;
     size_t len;
     int fd;
+    int rc;
 
     if (obj == NULL || path == NULL) {
-        return -1;
+        return SGL_AVI_ERR_ARG;
     }
     avi = sgl_container_of(obj, sgl_avi_t, obj);
 
     fd = sgl_fs_open(path, SGL_O_RDONLY);
     if (fd < 0) {
         SGL_LOG_ERROR("avi: open failed");
-        return -1;
+        return SGL_AVI_ERR_IO;
     }
     if (sgl_fs_stat(path, &st) != 0 || st.st_size < 64 ||
         (uint64_t)st.st_size > (uint64_t)INT32_MAX) {
         sgl_fs_close(fd);
         SGL_LOG_ERROR("avi: stat failed or file too small");
-        return -1;
+        return SGL_AVI_ERR_IO;
     }
 
     /* drop any previously loaded file */
@@ -2911,7 +2940,7 @@ int sgl_avi_load_file(sgl_obj_t *obj, const char *path)
     copy = (char *)sgl_malloc(len);
     if (copy == NULL) {
         avi_release_file(avi);
-        return -1;
+        return SGL_AVI_ERR_ARG;
     }
     memcpy(copy, path, len);
     avi->path = copy;
@@ -2927,6 +2956,8 @@ int sgl_avi_load_file(sgl_obj_t *obj, const char *path)
     avi->period_us = 1000000u / AVI_DEFAULT_FPS;
     avi->movi_first = -1;
     avi->movi_end = avi->file_size;
+    avi->vcomp = 0;
+    avi->vmjpg = 0;
 
     /* the built-in busy bar is painted by the construct callback while the
      * loading flag is set; enable it for this load pass */
@@ -2934,11 +2965,12 @@ int sgl_avi_load_file(sgl_obj_t *obj, const char *path)
     g_avi_load_bg_dirty = false;
     g_avi_load_t0 = sgl_tick_get();
 
-    if (avi_parse_header(avi) != 0) {
-        SGL_LOG_ERROR("avi: bad AVI header");
+    rc = avi_parse_header(avi);
+    if (rc != SGL_AVI_OK) {
+        SGL_LOG_ERROR("avi: load failed, rc %d", rc);
         g_avi_loading = false;
         avi_release_file(avi);
-        return -1;
+        return rc;
     }
 
     avi->period_ms = (uint16_t)(1000u / avi->fps);
@@ -2996,7 +3028,7 @@ int sgl_avi_load_file(sgl_obj_t *obj, const char *path)
                  (int)avi_vidx_total(avi), (int)avi->vidx_count,
                  avi->vidx_count > 0 ? (int)avi_vidx_stride(avi) : 0, (int)avi->fps,
                  (int)avi->audio, (int)avi->file_size);
-    return 0;
+    return SGL_AVI_OK;
 }
 
 /**
