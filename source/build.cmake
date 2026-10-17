@@ -22,6 +22,7 @@
 #
 
 include(${CMAKE_CURRENT_LIST_DIR}/core/build.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/fs/build.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/draw/build.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/fonts/build.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/mm/build.cmake)
