@@ -1738,7 +1738,7 @@ static void avi_probe_offsets(sgl_avi_t *avi)
  */
 static int avi_parse_header(sgl_avi_t *avi)
 {
-    uint8_t hdr[8];
+    uint8_t hdr[12]; /* first RIFF header: id + size + AVI fourcc */
     uint8_t sub[4];
     uint32_t id, size, riff_size;
     int32_t pos, limit;
