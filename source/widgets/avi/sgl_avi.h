@@ -76,6 +76,16 @@ extern "C" {
 #endif
 
 /**
+ * @brief return codes of sgl_avi_load_file()
+ * @note any non zero value means nothing was loaded
+ */
+#define SGL_AVI_OK                  (0)   /* stream parsed and ready to play */
+#define SGL_AVI_ERR_ARG             (-1) /* NULL object/path, or out of memory */
+#define SGL_AVI_ERR_IO              (-2) /* open / stat / read of the file failed */
+#define SGL_AVI_ERR_FORMAT          (-3) /* not a RIFF "AVI " file, or no movi list */
+#define SGL_AVI_ERR_VCODEC          (-4) /* AVI is fine but the video stream is not MJPEG */
+
+/**
  * @brief platform PCM output interface used by the AVI player
  *
  * Register one instance with sgl_avi_set_audio_port() before playback. The
@@ -171,16 +181,6 @@ sgl_obj_t* sgl_avi_create(sgl_obj_t *parent);
  *       audio port, but PCM audio will be disabled
  */
 int sgl_avi_set_audio_port(const sgl_avi_audio_port_t *port);
-
-/**
- * @brief return codes of sgl_avi_load_file()
- * @note any non zero value means nothing was loaded
- */
-#define SGL_AVI_OK          0   /* stream parsed and ready to play */
-#define SGL_AVI_ERR_ARG    (-1) /* NULL object/path, or out of memory */
-#define SGL_AVI_ERR_IO     (-2) /* open / stat / read of the file failed */
-#define SGL_AVI_ERR_FORMAT (-3) /* not a RIFF "AVI " file, or no movi list */
-#define SGL_AVI_ERR_VCODEC (-4) /* AVI is fine but the video stream is not MJPEG */
 
 /**
  * @brief open an AVI file and parse its stream headers and indexes
