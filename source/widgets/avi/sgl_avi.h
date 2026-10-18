@@ -41,39 +41,22 @@
 extern "C" {
 #endif
 
-/* Maximum decoded RGB565 frame buffer: 2 * decoded_width * decoded_height.
- * The decoder scales by 1/1, 1/2, 1/4 or 1/8 to fit this byte budget.
- * 160 KiB fits a full 320x240 frame.
- * Low-memory MCUs: a 48 KiB budget decodes a 320x240 source at 160x120
- * (1/2 scale) and saves ~100 KiB of heap. */
-#ifndef SGL_AVI_PIXMAP_MAX
-#define SGL_AVI_PIXMAP_MAX          (160 * 1024)
-#endif
-
 /* Decoder work pool for the inlined JPEG decoder. The default 12 KiB is
  * sufficient for common baseline MJPEG streams with the 4 KiB input buffer
  * and 8-bit fast Huffman LUT. Override for unusual table-heavy JPEG files. */
-#ifndef SGL_AVI_JDEC_POOL_SIZE
 #define SGL_AVI_JDEC_POOL_SIZE      (12 * 1024)
-#endif
 
 /* video frame staging buffer. Each video chunk is bulk-read here first so
  * that the decoder runs from RAM at full speed. Chunks larger than this
  * budget fall back to a streaming decode straight from the file. */
-#ifndef SGL_AVI_VBUF_MAX
 #define SGL_AVI_VBUF_MAX            (18 * 1024)
-#endif
 
 /* audio file read / port write chunk size per pump pass */
-#ifndef SGL_AVI_AUDIO_CHUNK
 #define SGL_AVI_AUDIO_CHUNK         (1024)
-#endif
 
-/* PCM buffering owned and allocated by the AVI core. 8 KiB is about 190 ms
+/* PCM buffering owned and allocated by the AVI core. 4 KiB is about 23 ms
  * of 44.1 kHz / 16-bit / stereo audio; the pump refills it every few ms */
-#ifndef SGL_AVI_AUDIO_BUFFER_SIZE
-#define SGL_AVI_AUDIO_BUFFER_SIZE   (8 * 1024)
-#endif
+#define SGL_AVI_AUDIO_BUFFER_SIZE   (4 * 1024)
 
 /**
  * @brief return codes of sgl_avi_load_file()
@@ -89,9 +72,10 @@ extern "C" {
  * @brief platform PCM output interface used by the AVI player
  *
  * Register one instance with sgl_avi_set_audio_port() before playback. The
- * AVI core owns a 16 KiB PCM ring and calls write() with complete PCM sample
- * frames. The port only needs to submit those bytes to its output device; it
- * does not need to allocate or own an intermediate PCM buffer.
+ * AVI core owns a PCM ring of SGL_AVI_AUDIO_BUFFER_SIZE bytes and calls
+ * write() with complete PCM sample frames. The port only needs to submit
+ * those bytes to its output device; it does not need to allocate or own an
+ * intermediate PCM buffer.
  *
  * AVI audio is uncompressed PCM. The current parser accepts 1 or 2 channels
  * and 8-bit or 16-bit samples. Callbacks run from the SGL playback/task
@@ -223,15 +207,6 @@ void sgl_avi_stop(sgl_obj_t *obj);
  * @return none
  */
 void sgl_avi_set_fps(sgl_obj_t *obj, uint8_t fps);
-
-/**
- * @brief set the minimum JPEG downscale factor
- * @param obj AVI player object
- * @param scale 0=full, 1=half, 2=quarter, or 3=eighth resolution
- * @return none
- * @note the decoder may downscale further to satisfy SGL_AVI_PIXMAP_MAX
- */
-void sgl_avi_set_decode_scale(sgl_obj_t *obj, uint8_t scale);
 
 /**
  * @brief seek to a video frame and align audio to the same playback position

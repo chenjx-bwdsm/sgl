@@ -1,29 +1,5 @@
 ﻿/* source/widgets/avi/sgl_avi.c
  *
- * AVI container player widget: video = MJPEG (one JPEG frame per "00dc"
- * chunk), audio = uncompressed PCM ("01wb" chunks), output through the
- * platform callbacks registered with sgl_avi_set_audio_port().
- *
- * The JPEG decoder below is the inlined TJpgDec R0.03.
- *
- * Playback engine (rewritten, derived from the reference implementation in
- * sgl/video_test):
- *  - audio and video share one file descriptor. Reads use explicit offsets,
- *    and the playback task serializes the audio pump before video decoding,
- *    so the shared file cursor is repositioned before each chunk is read.
- *  - each video chunk is bulk-read into a staging buffer first and the
- *    JPEG decoder then runs completely from RAM instead of interleaving
- *    small SD transactions into the huffman hot loop. Oversized chunks
- *    fall back to a streaming decode straight from the file.
- *  - frame positions come from the idx1 table (exact offsets, binary
- *    search seek). The reader also works on files without an idx1 via a
- *    sequential chunk walk.
- *  - the audio feed position is the master clock: the video decoder only
- *    advances when the audio clock has reached the next frame time, and
- *    the picture is presented on the ISR-consumed (played) audio clock,
- *    with a stall watchdog so the picture can never freeze waiting on a
- *    stalled clock.
- *
  * MIT License
  *
  * Copyright(c) 2023-present All contributors of SGL
@@ -75,18 +51,8 @@
 /* stream input buffer, must be a power of 2. 4KB halves the number of
  * buffer-refill calls in the huffman hot loop compared to the 2KB default
  * and each refill is then a multi-sector transfer on the block device */
-#ifndef MJDEC_SZBUF
 #define MJDEC_SZBUF         4096 /* Size of stream input buffer, must be a power of 2 */
-#endif
-#ifndef MJDEC_USE_SCALE
-#define MJDEC_USE_SCALE     1 /* Use descaling feature (1:enabled, 0:disabled) */
-#endif
-#ifndef MJDEC_TBLCLIP
-#define MJDEC_TBLCLIP       1 /* Use table for saturation (1:enabled, 0:disabled) */
-#endif
-#ifndef MJDEC_FASTDECODE
 #define MJDEC_FASTDECODE    2 /* 0:Basic, 1:Faster, 2:Faster+ (more RAM) */
-#endif
 
 /* Match the decoder output format to SGL's configured framebuffer depth. */
 #if CONFIG_SGL_FBDEV_PIXEL_DEPTH == SGL_COLOR_RGB565
@@ -100,9 +66,9 @@
 /* bytes per decoded pixel in the pixmap */
 #define AVI_OUTPUT_BPP ((MJDEC_FORMAT == 1) ? 2 : 3)
 
-/* The inlined decoder implementation is specialized for these options. */
-#if MJDEC_TBLCLIP != 1 || MJDEC_FASTDECODE != 2
-#error "sgl_avi: the inlined decoder requires MJDEC_TBLCLIP=1 and MJDEC_FASTDECODE=2"
+/* The inlined decoder implementation is specialized for this option. */
+#if MJDEC_FASTDECODE != 2
+#error "sgl_avi: the inlined decoder requires MJDEC_FASTDECODE=2"
 #endif
 
 #if MJDEC_FASTDECODE >= 1
@@ -136,7 +102,6 @@ struct MJDEC {
     uint8_t *dptr;            /* Current data read ptr */
     uint8_t *inbuf;           /* Bit stream input buffer */
     uint8_t dbit;             /* Number of bits available in wreg */
-    uint8_t scale;            /* Output scaling ratio */
     uint8_t msx, msy;         /* MCU size in unit of block (width, height) */
     uint8_t qtid[3];          /* Quantization table ID of each component, Y, Cb, Cr */
     uint8_t ncomp;            /* Number of color components 1:grayscale, 3:color */
@@ -150,12 +115,12 @@ struct MJDEC {
     uint8_t *huffdata[2][2];  /* Huffman decoded data tables [id][dcac] */
     int32_t *qttbl[4];        /* Dequantizer tables [id] */
 #if MJDEC_FASTDECODE >= 1
-    uint32_t wreg;  /* Working shift register */
-    uint8_t marker; /* Detected marker (0:None) */
+    uint32_t wreg;            /* Working shift register */
+    uint8_t marker;           /* Detected marker (0:None) */
 #if MJDEC_FASTDECODE == 2
-    uint8_t longofs[2][2];   /* Table offset of long code [id][dcac] */
-    uint16_t *hufflut_ac[2]; /* Fast huffman decode tables for AC short code [id] */
-    uint8_t *hufflut_dc[2];  /* Fast huffman decode tables for DC short code [id] */
+    uint8_t longofs[2][2];    /* Table offset of long code [id][dcac] */
+    uint16_t *hufflut_ac[2];  /* Fast huffman decode tables for AC short code [id] */
+    uint8_t *hufflut_dc[2];   /* Fast huffman decode tables for DC short code [id] */
 #endif
 #endif
     void *workbuf;                                /* Working buffer for IDCT and RGB output */
@@ -166,7 +131,7 @@ struct MJDEC {
     void *pool_original;                          /* Pointer to original pool */
     size_t sz_pool;                               /* Size of memory pool (bytes available) */
     size_t (*infunc)(MJDEC *, uint8_t *, size_t); /* Pointer to jpeg stream input function */
-    void *device; /* Pointer to I/O device identifier for the session */
+    void *device;                                 /* Pointer to I/O device identifier for the session */
 };
 
 #if MJDEC_FASTDECODE == 2
@@ -175,10 +140,12 @@ struct MJDEC {
 #define HUFF_MASK (HUFF_LEN - 1)
 #endif
 
-static const uint8_t Zig[64] = {0,  1,  8,  16, 9,  2,  3,  10, 17, 24, 32, 25, 18, 11, 4,  5,
-                                12, 19, 26, 33, 40, 48, 41, 34, 27, 20, 13, 6,  7,  14, 21, 28,
-                                35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44, 51,
-                                58, 59, 52, 45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63};
+static const uint8_t Zig[64] = {
+    0,  1,  8,  16, 9,  2,  3,  10, 17, 24, 32, 25, 18, 11, 4,  5,
+    12, 19, 26, 33, 40, 48, 41, 34, 27, 20, 13, 6,  7,  14, 21, 28,
+    35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44, 51,
+    58, 59, 52, 45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63
+};
 
 static const uint16_t Ipsf[64] = {
     /* See also aa_idct.png */
@@ -203,9 +170,8 @@ static const uint16_t Ipsf[64] = {
     (uint16_t)(0.29290 * 8192), (uint16_t)(0.14932 * 8192), (uint16_t)(0.27590 * 8192),
     (uint16_t)(0.38268 * 8192), (uint16_t)(0.36048 * 8192), (uint16_t)(0.32442 * 8192),
     (uint16_t)(0.27590 * 8192), (uint16_t)(0.21678 * 8192), (uint16_t)(0.14932 * 8192),
-    (uint16_t)(0.07612 * 8192)};
-
-#if MJDEC_TBLCLIP
+    (uint16_t)(0.07612 * 8192)
+};
 
 #define BYTECLIP(v) Clip8[(unsigned int)(v) & 0x3FF]
 
@@ -217,10 +183,6 @@ static uint8_t clip8_ready = 0;
 /* YCbCr -> RGB fixed point accuracy, adaptive for 16-/32-bit systems */
 #define MJDEC_CVACC ((sizeof(int) > 2) ? 1024 : 128)
 
-/* chroma contribution tables: cb/cr only have 256 possible values, so the
- * per-pixel multiplies and divides are precomputed once. Each entry holds
- * exactly ((int)(K * MJDEC_CVACC) * (v - 128)) / MJDEC_CVACC, the same
- * fixed point term the pixel loop used to compute per pixel */
 static int16_t ycc_r_cr[256];
 static int16_t ycc_g_cb[256];
 static int16_t ycc_g_cr[256];
@@ -261,22 +223,7 @@ static unsigned int ycc_idx(int v)
     return (unsigned int)v;
 }
 
-#else /* MJDEC_TBLCLIP */
-
-static uint8_t BYTECLIP(int val)
-{
-    if (val < 0)
-        return 0;
-    if (val > 255)
-        return 255;
-    return (uint8_t)val;
-}
-#endif
-
-static void *alloc_pool(/* Pointer to allocated memory block (NULL:no memory available) */
-                        MJDEC *jd,   /* Pointer to the decompressor object */
-                        size_t ndata /* Number of bytes to allocate */
-)
+static void *alloc_pool(MJDEC *jd, size_t ndata)
 {
     char *rp = 0;
 
@@ -291,11 +238,7 @@ static void *alloc_pool(/* Pointer to allocated memory block (NULL:no memory ava
     return (void *)rp; /* Return allocated memory block (NULL:no memory to allocate) */
 }
 
-static MJRESULT create_qt_tbl(                     /* 0:OK, !0:Failed */
-                              MJDEC *jd,           /* Pointer to the decompressor object */
-                              const uint8_t *data, /* Pointer to the quantizer tables */
-                              size_t ndata         /* Size of input data */
-)
+static MJRESULT create_qt_tbl(MJDEC *jd, const uint8_t *data, size_t ndata)
 {
     unsigned int i, zi;
     uint8_t d;
@@ -315,20 +258,14 @@ static MJRESULT create_qt_tbl(                     /* 0:OK, !0:Failed */
         jd->qttbl[i] = pb;         /* Register the table */
         for (i = 0; i < 64; i++) { /* Load the table */
             zi = Zig[i];           /* Zigzag-order to raster-order conversion */
-            pb[zi] =
-                (int32_t)((uint32_t)*data++ *
-                          Ipsf[zi]); /* Apply scale factor of Arai algorithm to the de-quantizers */
+            pb[zi] = (int32_t)((uint32_t)*data++ * Ipsf[zi]);
         }
     }
 
     return MJDR_OK;
 }
 
-static MJRESULT create_huffman_tbl(                     /* 0:OK, !0:Failed */
-                                   MJDEC *jd,           /* Pointer to the decompressor object */
-                                   const uint8_t *data, /* Pointer to the packed huffman tables */
-                                   size_t ndata         /* Size of input data */
-)
+static MJRESULT create_huffman_tbl(MJDEC *jd, const uint8_t *data, size_t ndata)
 {
     unsigned int i, j, b, cls, num;
     size_t np;
@@ -386,35 +323,29 @@ static MJRESULT create_huffman_tbl(                     /* 0:OK, !0:Failed */
             if (cls) {
                 tbl_ac = alloc_pool(jd, HUFF_LEN * sizeof(uint16_t)); /* LUT for AC elements */
                 if (!tbl_ac)
-                    return MJDR_MEM1; /* Err: not enough memory */
+                    return MJDR_MEM1;
                 jd->hufflut_ac[num] = tbl_ac;
-                memset(tbl_ac, 0xFF,
-                       HUFF_LEN * sizeof(uint16_t)); /* Default value (0xFFFF: may be long code) */
+                memset(tbl_ac, 0xFF, HUFF_LEN * sizeof(uint16_t));
             } else {
                 tbl_dc = alloc_pool(jd, HUFF_LEN * sizeof(uint8_t)); /* LUT for DC elements */
                 if (!tbl_dc)
-                    return MJDR_MEM1; /* Err: not enough memory */
+                    return MJDR_MEM1;
                 jd->hufflut_dc[num] = tbl_dc;
-                memset(tbl_dc, 0xFF,
-                       HUFF_LEN * sizeof(uint8_t)); /* Default value (0xFF: may be long code) */
+                memset(tbl_dc, 0xFF, HUFF_LEN * sizeof(uint8_t));
             }
             for (i = b = 0; b < HUFF_BIT; b++) { /* Create LUT */
                 for (j = pb[b]; j; j--) {
-                    ti = ph[i] << (HUFF_BIT - 1 - b) &
-                         HUFF_MASK; /* Index of input pattern for the code */
+                    ti = ph[i] << (HUFF_BIT - 1 - b) & HUFF_MASK;
                     if (cls) {
-                        td = pd[i++] |
-                             ((b + 1)
-                              << 8); /* b15..b8: code length, b7..b0: zero run and data length */
-                        for (span = 1 << (HUFF_BIT - 1 - b); span;
-                             span--, tbl_ac[ti++] = (uint16_t)td)
+                        td = pd[i++] | ((b + 1) << 8);
+                        for (span = 1 << (HUFF_BIT - 1 - b); span; span--, tbl_ac[ti++] = (uint16_t)td) {
                             ;
+                        }
                     } else {
-                        td =
-                            pd[i++] | ((b + 1) << 4); /* b7..b4: code length, b3..b0: data length */
-                        for (span = 1 << (HUFF_BIT - 1 - b); span;
-                             span--, tbl_dc[ti++] = (uint8_t)td)
+                        td = pd[i++] | ((b + 1) << 4); /* b7..b4: code length, b3..b0: data length */
+                        for (span = 1 << (HUFF_BIT - 1 - b); span; span--, tbl_dc[ti++] = (uint8_t)td) {
                             ;
+                        }
                     }
                 }
             }
@@ -426,11 +357,7 @@ static MJRESULT create_huffman_tbl(                     /* 0:OK, !0:Failed */
     return MJDR_OK;
 }
 
-static int huffext(                 /* >=0: decoded data, <0: error code */
-                   MJDEC *jd,       /* Pointer to the decompressor object */
-                   unsigned int id, /* Table ID (0:Y, 1:C) */
-                   unsigned int cls /* Table class (0:DC, 1:AC) */
-)
+static int huffext(MJDEC *jd, unsigned int id, unsigned int cls)
 {
     size_t dc = jd->dctr;
     uint8_t *dp = jd->dptr;
@@ -510,10 +437,7 @@ static int huffext(                 /* >=0: decoded data, <0: error code */
     return 0 - (int)MJDR_FMT1; /* Err: code not found (may be corrupted data) */
 }
 
-static int bitext(                  /* >=0: extracted data, <0: error code */
-                  MJDEC *jd,        /* Pointer to the decompressor object */
-                  unsigned int nbit /* Number of bits to extract (1 to 16) */
-)
+static int bitext(MJDEC *jd, unsigned int nbit)
 {
     size_t dc = jd->dctr;
     uint8_t *dp = jd->dptr;
@@ -556,9 +480,7 @@ static int bitext(                  /* >=0: extracted data, <0: error code */
     return (int)(w >> ((wbit - nbit) % 32));
 }
 
-static MJRESULT mj_restart(MJDEC *jd,    /* Pointer to the decompressor object */
-                           uint16_t rstn /* Expected restart sequence number */
-)
+static MJRESULT mj_restart(MJDEC *jd, uint16_t rstn)
 {
     unsigned int i;
     uint8_t *dp = jd->dptr;
@@ -594,10 +516,7 @@ static MJRESULT mj_restart(MJDEC *jd,    /* Pointer to the decompressor object *
     return MJDR_OK;
 }
 
-static void
-block_idct(int32_t *src, /* Input block data (de-quantized and pre-scaled for Arai Algorithm) */
-           mj_yuv_t *dst /* Pointer to the destination to store the block as byte array */
-)
+static void block_idct(int32_t *src, mj_yuv_t *dst)
 {
     const int32_t M13 = (int32_t)(1.41421 * 4096), M2 = (int32_t)(1.08239 * 4096),
                   M4 = (int32_t)(2.61313 * 4096), M5 = (int32_t)(1.84776 * 4096);
@@ -712,8 +631,7 @@ block_idct(int32_t *src, /* Input block data (de-quantized and pre-scaled for Ar
     }
 }
 
-static MJRESULT mcu_load(MJDEC *jd /* Pointer to the decompressor object */
-)
+static MJRESULT mcu_load(MJDEC *jd)
 {
     int32_t *tmp = (int32_t *)jd->workbuf; /* Block working buffer for de-quantize and IDCT */
     int d, e;
@@ -754,11 +672,8 @@ static MJRESULT mcu_load(MJDEC *jd /* Pointer to the decompressor object */
             tmp[0] = d * dqf[0] >>
                      8; /* De-quantize, apply scale factor of Arai algorithm and descale 8 bits */
 
-            /* Extract following 63 AC elements from input stream. At 1/8
-             * scale every block is emitted from its DC value, so no AC
-             * coefficient workspace is consumed and clearing it is wasted. */
-            if (!(MJDEC_USE_SCALE && jd->scale == 3))
-                memset(&tmp[1], 0, 63 * sizeof(int32_t));
+            /* Extract following 63 AC elements from input stream. */
+            memset(&tmp[1], 0, 63 * sizeof(int32_t));
             z = 1; /* Top of the AC elements (in zigzag-order) */
             do {
                 d = huffext(jd, id,
@@ -786,10 +701,8 @@ static MJRESULT mcu_load(MJDEC *jd /* Pointer to the decompressor object */
 
             if (MJDEC_FORMAT != 2 ||
                 !cmp) { /* C components may not be processed if in grayscale output */
-                if (z == 1 ||
-                    (MJDEC_USE_SCALE &&
-                     jd->scale == 3)) { /* If no AC element or scale ratio is 1/8, IDCT can be
-                                           ommited and the block is filled with DC value */
+                if (z == 1) { /* If no AC element, IDCT can be ommited and the block
+                                 is filled with DC value */
                     d = (mj_yuv_t)((*tmp / 256) + 128);
                     if (MJDEC_FASTDECODE >= 1) {
                         for (i = 0; i < 64; bp[i++] = d)
@@ -809,184 +722,81 @@ static MJRESULT mcu_load(MJDEC *jd /* Pointer to the decompressor object */
     return MJDR_OK; /* All blocks have been loaded successfully */
 }
 
-/* Divide by a power of two with C's truncation-toward-zero semantics. */
-static int div_pow2_toward_zero(int value, unsigned int shift)
+static MJRESULT mcu_output(MJDEC *jd, int (*outfunc)(MJDEC *, void *, MJRECT *), unsigned int x, unsigned int y)
 {
-    if (!shift)
-        return value;
-    if (value < 0)
-        return -((-value) >> shift);
-    return value >> shift;
-}
-
-static MJRESULT mcu_output(MJDEC *jd, /* Pointer to the decompressor object */
-                           int (*outfunc)(MJDEC *, void *, MJRECT *), /* RGB output function */
-                           unsigned int x, /* MCU location in the image */
-                           unsigned int y  /* MCU location in the image */
-)
-{
-    unsigned int mx, my, rx, ry;
+    unsigned int mx = jd->msx * 8;
+    unsigned int my = jd->msy * 8; /* MCU size (pixel) */
+    const unsigned int y_blocks = jd->msx * jd->msy;
+    const unsigned int msx64 = jd->msx * 64;
+    const unsigned int cxsub = (mx == 16); /* chroma sampled at half x rate */
+    const unsigned int cysub = (my == 16); /* chroma sampled at half y rate */
+    const unsigned int rx =
+        (x + mx <= jd->width) ? mx : jd->width - x; /* clipped at right/bottom end of image */
+    const unsigned int ry = (y + my <= jd->height) ? my : jd->height - y;
+    mj_yuv_t *chroma = jd->mcubuf + y_blocks * 64;
+    uint8_t *out_base;
+    size_t out_pitch;
+    unsigned int ox, oy;
     MJRECT rect;
 
-    mx = jd->msx * 8;
-    my = jd->msy * 8; /* MCU size (pixel) */
-    rx = (x + mx <= jd->width)
-             ? mx
-             : jd->width -
-                   x; /* Output rectangular size (it may be clipped at right/bottom end of image) */
-    ry = (y + my <= jd->height) ? my : jd->height - y;
-    if (MJDEC_USE_SCALE) {
-        rx >>= jd->scale;
-        ry >>= jd->scale;
-        if (!rx || !ry)
-            return MJDR_OK; /* Skip this MCU if all pixel is to be rounded off */
-        x >>= jd->scale;
-        y >>= jd->scale;
+    if (jd->dst != NULL) {
+        out_base = jd->dst + ((size_t)y * (size_t)jd->dst_stride + x) * AVI_OUTPUT_BPP;
+        out_pitch = (size_t)jd->dst_stride * AVI_OUTPUT_BPP;
+    } else {
+        out_base = (uint8_t *)jd->workbuf;
+        out_pitch = (size_t)rx * AVI_OUTPUT_BPP;
     }
+
     rect.left = x;
     rect.right = x + rx - 1; /* Rectangular area in the frame buffer */
     rect.top = y;
     rect.bottom = y + ry - 1;
 
-    /* Convert and scale directly from YCbCr into the configured output
-     * format. Chroma samples are shared by neighboring pixels in subsampled
-     * JPEGs, so average each stored chroma sample once. When jd->dst is
-     * set the pixels are written straight into the target frame (with its
-     * row stride) and the workbuf round trip is skipped entirely. */
-    {
-        const unsigned int factor = 1U << jd->scale;
-        const unsigned int y_blocks = jd->msx * jd->msy;
-        const unsigned int chroma_w = (mx == 16) ? factor >> 1 : factor;
-        const unsigned int chroma_h = (my == 16) ? factor >> 1 : factor;
-        const unsigned int chroma_shift = (mx == 16) + (my == 16);
-        const unsigned int y_shift = jd->scale * 2;
-        const unsigned int msx64 = jd->msx * 64;
-        const unsigned int cxsub = (mx == 16); /* chroma sampled at half x rate */
-        const unsigned int cysub = (my == 16); /* chroma sampled at half y rate */
-        mj_yuv_t *chroma = jd->mcubuf + y_blocks * 64;
-        uint8_t *out_base;
-        size_t out_pitch;
-        unsigned int ox, oy, sx, sy;
-
-        if (jd->dst != NULL) {
-            out_base = jd->dst + ((size_t)y * (size_t)jd->dst_stride + x) * AVI_OUTPUT_BPP;
-            out_pitch = (size_t)jd->dst_stride * AVI_OUTPUT_BPP;
-        } else {
-            out_base = (uint8_t *)jd->workbuf;
-            out_pitch = (size_t)rx * AVI_OUTPUT_BPP;
-        }
-
-        if (factor == 1) {
-            /* full resolution: walk the MCU blocks with running pointers,
-             * the >>3 / *64 addressing is resolved once per row and block
-             * edge instead of per pixel */
-            for (oy = 0; oy < ry; oy++) {
-                const mj_yuv_t *yp = jd->mcubuf + (oy >> 3) * msx64 + (oy & 7) * 8;
-                const mj_yuv_t *cbp = chroma + ((cysub ? (oy >> 1) : oy) << 3);
-                const mj_yuv_t *crp = cbp + 64;
+    /* full resolution: walk the MCU blocks with running pointers,
+     * the >>3 / *64 addressing is resolved once per row and block
+     * edge instead of per pixel */
+    for (oy = 0; oy < ry; oy++) {
+        const mj_yuv_t *yp = jd->mcubuf + (oy >> 3) * msx64 + (oy & 7) * 8;
+        const mj_yuv_t *cbp = chroma + ((cysub ? (oy >> 1) : oy) << 3);
+        const mj_yuv_t *crp = cbp + 64;
 #if MJDEC_FORMAT == 1
-                uint16_t *outp = (uint16_t *)(out_base + (size_t)oy * out_pitch);
+        uint16_t *outp = (uint16_t *)(out_base + (size_t)oy * out_pitch);
 #else
-                uint8_t *outp = out_base + (size_t)oy * out_pitch;
+        uint8_t *outp = out_base + (size_t)oy * out_pitch;
 #endif
-                for (ox = 0; ox < rx; ox++) {
-                    const int yy = (int)*yp++;
-                    const unsigned int ci = cxsub ? (ox >> 1) : ox;
-                    const unsigned int cri = ycc_idx((int)crp[ci]);
-                    const unsigned int cbi = ycc_idx((int)cbp[ci]);
-                    const unsigned int r = BYTECLIP(yy + ycc_r_cr[cri]);
-                    const unsigned int g =
-                        BYTECLIP(yy - ycc_g_cb[cbi] - ycc_g_cr[cri]);
-                    const unsigned int b = BYTECLIP(yy + ycc_b_cb[cbi]);
+        for (ox = 0; ox < rx; ox++) {
+            const int yy = (int)*yp++;
+            const unsigned int ci = cxsub ? (ox >> 1) : ox;
+            const unsigned int cri = ycc_idx((int)crp[ci]);
+            const unsigned int cbi = ycc_idx((int)cbp[ci]);
+            const unsigned int r = BYTECLIP(yy + ycc_r_cr[cri]);
+            const unsigned int g = BYTECLIP(yy - ycc_g_cb[cbi] - ycc_g_cr[cri]);
+            const unsigned int b = BYTECLIP(yy + ycc_b_cb[cbi]);
 
-                    if ((ox & 7) == 7) {
-                        yp += 56; /* hop to the next 8x8 block in this MCU row */
-                    }
-#if MJDEC_FORMAT == 1
-                    *outp++ = (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
-#else
-                    /* SGL RGB888 memory order is B,G,R: store in surface
-                     * order so the blit is a plain memcpy */
-                    *outp++ = (uint8_t)b;
-                    *outp++ = (uint8_t)g;
-                    *outp++ = (uint8_t)r;
-#endif
-                }
+            if ((ox & 7) == 7) {
+                yp += 56; /* hop to the next 8x8 block in this MCU row */
             }
-        } else {
-            for (oy = 0; oy < ry; oy++) {
-                const unsigned int src_y0 = oy * factor;
 #if MJDEC_FORMAT == 1
-                uint16_t *outp = (uint16_t *)(out_base + (size_t)oy * out_pitch);
+            *outp++ = (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
 #else
-                uint8_t *outp = out_base + (size_t)oy * out_pitch;
+            /* SGL RGB888 memory order is B,G,R: store in surface
+             * order so the blit is a plain memcpy */
+            *outp++ = (uint8_t)b;
+            *outp++ = (uint8_t)g;
+            *outp++ = (uint8_t)r;
 #endif
-                for (ox = 0; ox < rx; ox++) {
-                    const unsigned int src_x0 = ox * factor;
-                    const unsigned int chroma_x0 = cxsub ? src_x0 >> 1 : src_x0;
-                    const unsigned int chroma_y0 = cysub ? src_y0 >> 1 : src_y0;
-                    const unsigned int cb_shift = jd->scale * 2 - chroma_shift;
-                    int sum_y = 0;
-                    int sum_cb = 0, sum_cr = 0;
-                    int yy, cb, cr;
-                    unsigned int r, g, b;
-
-                    for (sy = 0; sy < factor; sy++) {
-                        const unsigned int src_y = src_y0 + sy;
-                        const unsigned int y_row = (src_y >> 3) * msx64 + (src_y & 7) * 8;
-                        for (sx = 0; sx < factor; sx++) {
-                            const unsigned int src_x = src_x0 + sx;
-                            const unsigned int y_block = (src_x >> 3) * 64;
-                            sum_y += (int)jd->mcubuf[y_row + y_block + (src_x & 7)];
-                        }
-                    }
-                    yy = sum_y >> y_shift;
-
-                    for (sy = 0; sy < chroma_h; sy++) {
-                        const unsigned int crow = (chroma_y0 + sy) * 8;
-                        for (sx = 0; sx < chroma_w; sx++) {
-                            const unsigned int cx = chroma_x0 + sx;
-                            const unsigned int ci = crow + cx;
-                            sum_cb += (int)chroma[ci] - 128;
-                            sum_cr += (int)chroma[64 + ci] - 128;
-                        }
-                    }
-                    /* Signed division rounds toward zero, matching C's /.
-                     * Avoid a target-dependent signed right-shift result. */
-                    cb = div_pow2_toward_zero(sum_cb, cb_shift);
-                    cr = div_pow2_toward_zero(sum_cr, cb_shift);
-
-                    r = BYTECLIP(yy + ycc_r_cr[ycc_idx(cr + 128)]);
-                    g = BYTECLIP(yy - ycc_g_cb[ycc_idx(cb + 128)] -
-                                 ycc_g_cr[ycc_idx(cr + 128)]);
-                    b = BYTECLIP(yy + ycc_b_cb[ycc_idx(cb + 128)]);
-#if MJDEC_FORMAT == 1
-                    *outp++ = (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
-#else
-                    *outp++ = (uint8_t)b;
-                    *outp++ = (uint8_t)g;
-                    *outp++ = (uint8_t)r;
-#endif
-                }
-            }
         }
-        /* a NULL bitmap tells the output function the pixels are already in
-         * place (direct target mode); it still votes on aborting */
-        return outfunc(jd, jd->dst != NULL ? NULL : jd->workbuf, &rect) ? MJDR_OK : MJDR_INTR;
     }
 
+    /* a NULL bitmap tells the output function the pixels are already in
+     * place (direct target mode); it still votes on aborting */
+    return outfunc(jd, jd->dst != NULL ? NULL : jd->workbuf, &rect) ? MJDR_OK : MJDR_INTR;
 }
 
 #define LDB_WORD(ptr)                                                                              \
     (uint16_t)(((uint16_t)*((uint8_t *)(ptr)) << 8) | (uint16_t)*(uint8_t *)((ptr) + 1))
 
-static MJRESULT mj_prepare(MJDEC *jd, /* Blank decompressor object */
-                           size_t (*infunc)(MJDEC *, uint8_t *,
-                                            size_t), /* JPEG strem input function */
-                           void *pool,     /* Working buffer for the decompression session */
-                           size_t sz_pool, /* Size of working buffer */
-                           void *dev       /* I/O device identifier for the session */
-)
+static MJRESULT mj_prepare(MJDEC *jd, size_t (*infunc)(MJDEC *, uint8_t *, size_t), void *pool, size_t sz_pool, void *dev)
 {
     uint8_t *seg, b;
     uint16_t marker;
@@ -1161,18 +971,11 @@ static MJRESULT mj_prepare(MJDEC *jd, /* Blank decompressor object */
     }
 }
 
-static MJRESULT mj_decomp(MJDEC *jd, /* Initialized decompression object */
-                          int (*outfunc)(MJDEC *, void *, MJRECT *), /* RGB output function */
-                          uint8_t scale /* Output de-scaling factor (0 to 3) */
-)
+static MJRESULT mj_decomp(MJDEC *jd, int (*outfunc)(MJDEC *, void *, MJRECT *))
 {
     unsigned int x, y, mx, my;
     uint16_t rst, rsc;
     MJRESULT rc;
-
-    if (scale > (MJDEC_USE_SCALE ? 3 : 0))
-        return MJDR_PAR;
-    jd->scale = scale;
 
     mx = jd->msx * 8;
     my = jd->msy * 8; /* Size of the MCU (pixel) */
@@ -1202,10 +1005,6 @@ static MJRESULT mj_decomp(MJDEC *jd, /* Initialized decompression object */
 
     return rc;
 }
-
-/*==========================================================================*/
-/*                            AVI container layer                            */
-/*==========================================================================*/
 
 /* RIFF chunk identifiers, read as little-endian 32-bit words */
 #define CC_RIFF                  0x46464952u /* "RIFF" */
@@ -1311,9 +1110,7 @@ struct sgl_avi {
     /* decoded pixmap */
     uint8_t *pixbuf;      /* configured RGB frame, pix_w * pix_h pixels */
     int32_t pixbuf_size;  /* allocated capacity in pixels */
-    int16_t pix_w, pix_h; /* decoded frame size after scaling */
-    uint8_t jd_scale;     /* last chosen descale factor 0..3 */
-    uint8_t decode_scale; /* requested minimum descale factor 0..3 */
+    int16_t pix_w, pix_h; /* decoded frame size */
 
     /* decoder */
     uint8_t *vbuf;     /* RAM staging buffer for one chunk */
@@ -1931,19 +1728,21 @@ static int avi_parse_header(sgl_avi_t *avi)
 static int avi_ensure_pixbuf(sgl_avi_t *avi, int32_t w, int32_t h)
 {
     int64_t need;
+    int64_t budget;
+    int32_t widget_w = avi->obj.coords.x2 - avi->obj.coords.x1 + 1;
+    int32_t widget_h = avi->obj.coords.y2 - avi->obj.coords.y1 + 1;
 
     if (w <= 0 || h <= 0) {
         return -1;
     }
-    /* the pixel count rides an int64 so a corrupt SOF cannot wrap the
-     * allocation size; the budget is a hard cap because a forced
-     * decode_scale bypasses the scale picker */
+
+    budget = (int64_t)widget_w * widget_h * (CONFIG_SGL_FBDEV_PIXEL_DEPTH / 8);
     need = (int64_t)w * h;
-    if (need * AVI_OUTPUT_BPP > (int64_t)SGL_AVI_PIXMAP_MAX) {
-        SGL_LOG_ERROR("avi: frame %dx%d over the %d byte pixmap budget", (int)w, (int)h,
-                      (int)SGL_AVI_PIXMAP_MAX);
+    if (need * AVI_OUTPUT_BPP > budget) {
+        SGL_LOG_ERROR("avi: frame %dx%d over the %d byte pixmap budget", (int)w, (int)h, (int)budget);
         return -1;
     }
+
     if (avi->pixbuf != NULL && avi->pixbuf_size >= (int32_t)need) {
         avi->pix_w = (int16_t)w;
         avi->pix_h = (int16_t)h;
@@ -2113,7 +1912,7 @@ static size_t avi_sin_func(MJDEC *jd, uint8_t *buff, size_t ndata)
 /**
  * @brief decode the MJPEG chunk at offset. Chunks fitting the staging
  *        buffer are decoded fully from RAM, larger ones stream from the
- *        file. The descale factor is chosen so the pixmap budget holds
+ *        file. Frames over the pixmap budget (bigger than the widget) fail
  * @return 0 on success, -1 on any failure
  */
 static int avi_decode_chunk(sgl_avi_t *avi, int32_t offset, int32_t size)
@@ -2167,21 +1966,10 @@ static int avi_decode_chunk(sgl_avi_t *avi, int32_t offset, int32_t size)
         return -1;
     }
 
-    /* pick the largest descale factor that fits the pixmap budget */
-    {
-        int32_t w = (int32_t)jd.width;
-        int32_t h = (int32_t)jd.height;
-        uint8_t scale = avi->decode_scale;
-
-        while (scale < 3 &&
-               (int64_t)(w >> scale) * (h >> scale) * AVI_OUTPUT_BPP >
-                   (int64_t)SGL_AVI_PIXMAP_MAX) {
-            scale++;
-        }
-        if (avi_ensure_pixbuf(avi, w >> scale, h >> scale) != 0) {
-            return -1;
-        }
-        avi->jd_scale = scale;
+    /* no downscaling: the frame must fit the pixmap budget as-is, frames
+     * larger than the budget are rejected */
+    if (avi_ensure_pixbuf(avi, (int32_t)jd.width, (int32_t)jd.height) != 0) {
+        return -1;
     }
 
     /* direct target: the conversion writes straight into the pixmap,
@@ -2189,7 +1977,7 @@ static int avi_decode_chunk(sgl_avi_t *avi, int32_t offset, int32_t size)
     jd.dst = avi->pixbuf;
     jd.dst_stride = avi->pix_w;
 
-    rc = mj_decomp(&jd, avi_out_func, avi->jd_scale);
+    rc = mj_decomp(&jd, avi_out_func);
     return rc == MJDR_OK ? 0 : -1;
 }
 
@@ -2267,7 +2055,7 @@ static int avi_decode_next(sgl_avi_t *avi)
  */
 static void avi_audio_pump(sgl_avi_t *avi)
 {
-    int32_t want, got, written, aligned;
+    int32_t want, got, written, aligned, pass;
     uint32_t ring_free, ring_contiguous, port_contiguous;
     int progress;
 
@@ -2276,7 +2064,7 @@ static void avi_audio_pump(sgl_avi_t *avi)
         return;
     }
 
-    for (int32_t pass = 0; pass < AVI_PUMP_CHUNK_GUARD; pass++) {
+    for (pass = 0; pass < AVI_PUMP_CHUNK_GUARD; pass++) {
         progress = 0;
 
         if (avi->audio_buf_count < avi->audio_buf_capacity && avi->a_size == 0) {
@@ -2524,6 +2312,79 @@ static int avi_walk_video_skip(sgl_avi_t *avi, int32_t count)
 }
 
 /**
+ * @brief video-only catch-up: when the audio master clock has run ahead of
+ *        the video (decode can't sustain the frame rate), drop the stale
+ *        frames so the picture re-aligns with the sound instead of trailing
+ *        it further and further. Works whenever a frame index exists: a dense
+ *        index lands the cursor directly on the due frame, a sampled index
+ *        (files beyond AVI_VIDX_MAX frames) lands on the nearest entry and
+ *        walks the few chunks between, exactly like the video half of a seek.
+ *        Skipped frames are never decoded, so catching up costs no decode or
+ *        render time. The audio clock is never touched.
+ * @param avi pointer to the player
+ * @param played_ms current presentation clock in milliseconds
+ */
+static void avi_sync_catch_up(sgl_avi_t *avi, int32_t played_ms)
+{
+    int32_t total;
+    int32_t target;
+    int32_t behind;
+
+    if (avi->vidx_count <= 0) {
+        return; /* no index: strictly sequential, cannot skip cheaply */
+    }
+    total = avi_vidx_total(avi);
+    if (total <= 0 || avi->next_frame >= total) {
+        return;
+    }
+
+    /* only react once the next frame is already a full period stale, so
+     * normal sub-frame jitter is absorbed by the pacing rather than dropped */
+    behind = played_ms - avi_frame_slot_ms(avi, avi->next_frame);
+    if (behind <= (int32_t)avi->period_ms) {
+        return;
+    }
+
+    /* land on the frame actually due at the audio clock; the index is random
+     * access so jumping straight there is free, no need to dribble per cycle */
+    target = (int32_t)(((int64_t)played_ms * 1000) / avi->period_us);
+    if (target > total - 1) {
+        target = total - 1;
+    }
+    if (target <= avi->next_frame) {
+        return;
+    }
+
+    if (avi->vidx_step <= 1) {
+        /* dense index: random access straight onto the target frame */
+        avi->v_pos = avi->vidx[target].offset - 8;
+    } else {
+        /* sampled index: land on the nearest sampled entry, walk the gap */
+        int32_t stride = avi_vidx_stride(avi);
+        int32_t entry = target / stride;
+        int32_t base;
+
+        if (entry >= avi->vidx_count) {
+            entry = avi->vidx_count - 1;
+        }
+        base = entry * stride;
+        if (base >= total) {
+            base = total - 1;
+        }
+        avi->v_pos = avi->vidx[entry].offset - 8;
+        if (avi_walk_video_skip(avi, target - base) != 0) {
+            /* walk failed: settle on the sampled frame instead */
+            avi->v_pos = avi->vidx[entry].offset - 8;
+            target = base;
+        }
+    }
+
+    avi->v_size = 0;
+    avi->v_id = CC_ID_NONE;
+    avi->next_frame = target;
+}
+
+/**
  * @brief restart the animation timer at the current frame period
  */
 static void avi_anim_restart(sgl_avi_t *avi);
@@ -2544,8 +2405,16 @@ static void avi_cycle(sgl_avi_t *avi)
 
     if (!avi->frame_pending) {
         int32_t played_ms = avi_played_ms(avi);
-        int32_t slot = avi_frame_slot_ms(avi, avi->next_frame);
+        int32_t slot;
+        uint32_t now, consumed;
         int need = 1;
+
+        /* drop stale video so the picture stays locked to the audio clock */
+        if (avi->audio) {
+            avi_sync_catch_up(avi, played_ms);
+        }
+
+        slot = avi_frame_slot_ms(avi, avi->next_frame);
 
         /* keep exactly one frame of decode-ahead over the play clock. Once
          * the audio index is drained there is nothing left to wait for */
@@ -2558,15 +2427,13 @@ static void avi_cycle(sgl_avi_t *avi)
         }
 
         /* stall watchdog: a stalled audio clock must not freeze the video */
-        {
-            uint32_t now = sgl_tick_get();
-            uint32_t consumed = avi->audio ? avi_audio_consumed_bytes() : now;
-            if (consumed != avi->last_played) {
-                avi->last_played = consumed;
-                avi->last_adv_tick = now;
-            } else if (now - avi->last_adv_tick > AVI_CLOCK_STALL_MS) {
-                need = 1;
-            }
+        now = sgl_tick_get();
+        consumed = avi->audio ? avi_audio_consumed_bytes() : now;
+        if (consumed != avi->last_played) {
+            avi->last_played = consumed;
+            avi->last_adv_tick = now;
+        } else if (now - avi->last_adv_tick > AVI_CLOCK_STALL_MS) {
+            need = 1;
         }
 
         if (need && avi_decode_next(avi) != 0) {
@@ -2910,6 +2777,7 @@ int sgl_avi_load_file(sgl_obj_t *obj, const char *path)
 {
     sgl_avi_t *avi;
     sgl_stat_t st;
+    sgl_area_t area;
     char *copy;
     size_t len;
     int fd;
@@ -3019,11 +2887,9 @@ int sgl_avi_load_file(sgl_obj_t *obj, const char *path)
 
     /* loading over: repaint the whole widget (plain black) one last time */
     g_avi_loading = false;
-    {
-        sgl_area_t area = avi->obj.coords;
-        sgl_update_area(&area);
-        sgl_task_handler_sync();
-    }
+    area = avi->obj.coords;
+    sgl_update_area(&area);
+    sgl_task_handler_sync();
 
     SGL_LOG_INFO("avi: frames %d (idx %d x%d) fps %d audio %d size %d",
                  (int)avi_vidx_total(avi), (int)avi->vidx_count,
@@ -3147,23 +3013,6 @@ void sgl_avi_set_fps(sgl_obj_t *obj, uint8_t fps)
     if (avi->state == SGL_AVI_STATE_PLAYING) {
         avi_anim_restart(avi);
     }
-}
-
-/**
- * @brief set the minimum JPEG downscale factor
- * @param obj AVI player object
- * @param scale 0=full, 1=half, 2=quarter, or 3=eighth resolution
- * @return none
- * @note the decoder may downscale further to satisfy SGL_AVI_PIXMAP_MAX
- */
-void sgl_avi_set_decode_scale(sgl_obj_t *obj, uint8_t scale)
-{
-    sgl_avi_t *avi;
-
-    if (obj == NULL)
-        return;
-    avi = sgl_container_of(obj, sgl_avi_t, obj);
-    avi->decode_scale = scale > 3 ? 3 : scale;
 }
 
 /**
@@ -3400,7 +3249,7 @@ int32_t sgl_avi_get_frame_total(sgl_obj_t *obj)
     sgl_avi_t *avi;
     if (obj == NULL)
         return 0;
- avi = sgl_container_of(obj, sgl_avi_t, obj);
+    avi = sgl_container_of(obj, sgl_avi_t, obj);
     return avi_vidx_total(avi);
 }
 
