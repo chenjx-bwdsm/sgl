@@ -35,6 +35,7 @@
 #define COVERFLOW_DEFAULT_ANIM_MS    (260)   /* snap animation duration, ms */
 #define COVERFLOW_DEFAULT_RADIUS     (24)    /* focused card corner radius, px */
 #define COVERFLOW_DEFAULT_BORDER_W   (2)     /* card border width, px */
+#define COVERFLOW_CAPTION_GAP        (8)     /* gap between the focused card and its caption, px */
 
 /**
  * @brief place and scale every card from the current camera position
@@ -69,18 +70,44 @@ static void coverflow_layout(sgl_coverflow_t *coverflow)
         sgl_obj_set_pos(coverflow->cards[i], cx - w / 2, center_y - h / 2);
         sgl_obj_set_size(coverflow->cards[i], w, h);
         sgl_rect_set_radius(coverflow->cards[i], radius);
-        /* the caption is a direct child of the widget: center it on its
-         * card manually (widget-local coordinates) */
+        /* the caption is a direct child of the widget. a sgl_label keeps the
+         * box it was created with (the parent size) and centers its text in
+         * that box, so shrink the box to the text before placing it centered
+         * just below the card (widget-local coordinates); the caption is only
+         * shown for the focused card (see the visibility pass below) */
         if (coverflow->labels[i] != NULL) {
             sgl_obj_t *label = coverflow->labels[i];
-            sgl_obj_set_pos(label, cx - sgl_obj_get_width(label) / 2,
-                            center_y - sgl_obj_get_height(label) / 2);
+            sgl_label_t *lbl = sgl_container_of(label, sgl_label_t, obj);
+            /* measure with the label's current font: sgl_label keeps its
+             * text_length from creation and does not refresh it on
+             * sgl_label_set_font, so it may be stale / zero here */
+            const int16_t tw = sgl_font_get_string_width(lbl->text, lbl->font);
+            const int16_t th = sgl_font_get_height(lbl->font);
+            sgl_obj_set_size(label, tw, th);
+            sgl_obj_set_pos(label, cx - tw / 2,
+                            center_y + h / 2 + COVERFLOW_CAPTION_GAP);
         }
 
         const int32_t true_dist = sgl_abs(off);
         if (true_dist < top_dist) {
             top_dist = true_dist;
             top = i;
+        }
+    }
+
+    /* only the centered (top) card shows its caption, the side cards hide
+     * theirs; toggle the flags only when they really change so a drag does
+     * not push redundant dirty areas on every frame */
+    for (int16_t i = 0; i < coverflow->card_num; i++) {
+        if (coverflow->labels[i] == NULL) {
+            continue;
+        }
+        const bool show = (i == top);
+        if (show && sgl_obj_is_hidden(coverflow->labels[i])) {
+            sgl_obj_set_visible(coverflow->labels[i]);
+        }
+        else if (!show && !sgl_obj_is_hidden(coverflow->labels[i])) {
+            sgl_obj_set_hidden(coverflow->labels[i]);
         }
     }
 
@@ -130,6 +157,10 @@ static void coverflow_scroll_to(sgl_coverflow_t *coverflow, int32_t target)
         coverflow->anim = NULL;
     }
     if (target == coverflow->scroll) {
+        /* already at the target camera position, but the widget geometry may
+         * have changed since the last layout (the caller resized / moved it
+         * after creation): re-run the layout so the cards stay centered */
+        coverflow_layout(coverflow);
         return;
     }
 
@@ -286,8 +317,11 @@ static void sgl_coverflow_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_eve
         }
         break;
 
-    case SGL_EVENT_CLICKED: {
-        /* a drag ends with no activation, snap back to the nearest card */
+    case SGL_EVENT_CLICKED:
+    case SGL_EVENT_LONG_CLICKED: {
+        /* ENTER (quick tap or hold) activates the centered card, so both
+         * click kinds are handled the same way here.
+         * a drag ends with no activation, snap back to the nearest card */
         if (coverflow->sc.dragged) {
             coverflow->sc.dragged = 0;
             coverflow_scroll_to(coverflow, ((coverflow->scroll + coverflow->spacing / 2) / coverflow->spacing) * coverflow->spacing);
@@ -315,13 +349,19 @@ static void sgl_coverflow_construct_cb(sgl_surf_t *surf, sgl_obj_t *obj, sgl_eve
     }
 
     case SGL_EVENT_KEY_LEFT:
+    case SGL_EVENT_KEY_UP:
         sgl_scroll_anim_stop(&coverflow->sc);
         coverflow_scroll_to(coverflow, (coverflow->index - 1) * coverflow->spacing);
         break;
 
     case SGL_EVENT_KEY_RIGHT:
+    case SGL_EVENT_KEY_DOWN:
         sgl_scroll_anim_stop(&coverflow->sc);
         coverflow_scroll_to(coverflow, (coverflow->index + 1) * coverflow->spacing);
+        break;
+
+    case SGL_EVENT_KEY_ESC:
+        sgl_key_send_signal(evt, SGL_EVENT_KEY_CANCEL);
         break;
 
     case SGL_EVENT_DESTROYED:
@@ -383,7 +423,8 @@ sgl_obj_t* sgl_coverflow_create(sgl_obj_t *parent, const sgl_coverflow_card_t *c
     obj->construct_fn = sgl_coverflow_construct_cb;
     /* the widget itself is the event target: cards stay unclickable so the
      * click detection falls through to this object; movable enables drag
-     * tracking, editable lets ENTER arm the key scroll mode */
+     * tracking, editable lets ENTER activate the centered card while the
+     * group is in the (auto-enabled) key scroll mode */
     sgl_obj_set_movable(obj);
     sgl_obj_set_editable(obj);
     /* default to the parent size, the focused card rests at the center */
@@ -404,9 +445,10 @@ sgl_obj_t* sgl_coverflow_create(sgl_obj_t *parent, const sgl_coverflow_card_t *c
     coverflow->press_card = -1;
     sgl_scroll_reset(&coverflow->sc);
 
-    /* key group for arrow key scrolling: the widget is the only member,
-     * ENTER arms the scroll mode, LEFT / RIGHT scroll one card per key
-     * press and ESC leaves the scroll mode again */
+    /* key group for arrow key scrolling: the widget is the only member and,
+     * being a main menu, is focused and switched into the editing state at
+     * load time, so LEFT / RIGHT / UP / DOWN scroll one card per press right
+     * away and ENTER activates the centered card (no arming press needed) */
     coverflow->group = sgl_key_group_create(1);
     if (coverflow->group == NULL) {
         SGL_LOG_ERROR("sgl_coverflow_create: create key group failed");
@@ -442,7 +484,18 @@ sgl_obj_t* sgl_coverflow_create(sgl_obj_t *parent, const sgl_coverflow_card_t *c
     coverflow_layout(coverflow);
 
     if (coverflow->group != NULL) {
+        /* focus the coverflow and switch the group into the editing state
+         * right away: this is a main menu, so the arrow keys must scroll card
+         * by card without a first ENTER, and ENTER activates the center card.
+         * the group is dedicated to this widget, so forcing editing here is
+         * safe and does not affect the focus navigation of other widgets */
+        coverflow->group->focused = 0;
         sgl_key_group_load(coverflow->group);
+        coverflow->group->editing = 1;
+        /* key dispatch only needs the group focus index, not the obj focus
+         * flag that makes the core draw a wireframe around the widget; as a
+         * full-screen main menu the coverflow must not show that box */
+        sgl_obj_clear_focused(obj);
     }
 
     return obj;
@@ -604,4 +657,6 @@ void sgl_coverflow_set_font(sgl_obj_t *obj, const sgl_font_t *font)
             sgl_label_set_font(coverflow->labels[i], font);
         }
     }
+    /* the caption box is sized from the font metrics, so re-layout */
+    coverflow_layout(coverflow);
 }

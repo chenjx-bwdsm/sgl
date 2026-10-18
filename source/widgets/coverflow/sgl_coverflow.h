@@ -55,9 +55,11 @@ typedef struct sgl_coverflow_card {
  *        card with an ease-out animation. Tapping a side card slides it to
  *        the center; tapping the centered card fires the card's own event
  *        callback (set with sgl_obj_set_event_cb on the card object). The
- *        widget itself lives in a key group: press ENTER once to enter
- *        scroll mode, then LEFT / RIGHT scroll one card per key press and
- *        ESC leaves scroll mode again.
+ *        widget is designed as a main menu: it is the only member of its key
+ *        group and is focused with the group switched into the editing state
+ *        at creation, so LEFT / RIGHT / UP / DOWN scroll one card per key
+ *        press immediately (no focus / arming ENTER needed) and ENTER fires
+ *        the centered card's event callback.
  */
 typedef struct sgl_coverflow {
     sgl_obj_t        obj;

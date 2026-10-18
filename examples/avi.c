@@ -299,7 +299,6 @@ void sgl_avi_examples(sgl_obj_t *parent)
     }
 
     if (sgl_avi_load_file(avi, selected) == 0) {
-        sgl_avi_set_decode_scale(avi, 0);
         sgl_avi_progress_create(avi);
         sgl_avi_play(avi);
         sgl_avi_example_status(avi, selected);
