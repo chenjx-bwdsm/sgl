@@ -1371,9 +1371,9 @@ static uint8_t g_audio_port_ready;
  * and pumps the pipeline once with sgl_task_handler_sync(). The slider
  * position is time-driven, so the sweep speed is independent of the beat
  * frequency */
-#define AVI_LOAD_BAR_W         240     /* track length (clipped to the widget) */
+#define AVI_LOAD_BAR_DIV       2       /* track length = widget width / this */
 #define AVI_LOAD_BAR_H         4       /* track thickness */
-#define AVI_LOAD_SEG_W         60      /* sweeping slider width */
+#define AVI_LOAD_SEG_DIV       4       /* slider width = bar width / this */
 #define AVI_LOAD_SPEED         80      /* slider speed: pixels/second */
 #define AVI_LOAD_COLOR_TRACK   sgl_rgb(66, 66, 66)   /* dark gray groove */
 #define AVI_LOAD_COLOR_FILL    sgl_rgb(0, 255, 255)  /* cyan slider */
@@ -1387,17 +1387,18 @@ static bool avi_load_geom(const sgl_avi_t *avi, sgl_area_t *track, sgl_area_t *s
 {
     int32_t x1 = avi->obj.coords.x1;
     int32_t y1 = avi->obj.coords.y1;
-    int32_t w = avi->obj.coords.x2 - x1 + 1;
+    int32_t w = avi->obj.coords.x2 - x1 + 1;   /* == sgl_obj_get_width, const-safe */
     int32_t h = avi->obj.coords.y2 - y1 + 1;
-    int32_t bar_w = (w > AVI_LOAD_BAR_W) ? AVI_LOAD_BAR_W : w;
+    int32_t bar_w = w / AVI_LOAD_BAR_DIV;
+    int32_t seg_w = bar_w / AVI_LOAD_SEG_DIV;
     uint32_t span, phase, pos;
     int32_t bx, by;
 
-    if (bar_w < AVI_LOAD_SEG_W + 2) {
+    if (bar_w < seg_w + 2) {
         return false;
     }
     /* triangle wave over the elapsed milliseconds: 0 -> span -> 0 sweep */
-    span = (uint32_t)(bar_w - AVI_LOAD_SEG_W);
+    span = (uint32_t)(bar_w - seg_w);
     phase = (sgl_tick_get() - g_avi_load_t0) * AVI_LOAD_SPEED / 1000u;
     phase %= (2 * span);
     pos = (phase <= span) ? phase : (2 * span - phase);
@@ -1410,7 +1411,7 @@ static bool avi_load_geom(const sgl_avi_t *avi, sgl_area_t *track, sgl_area_t *s
     track->y2 = (int16_t)(by + AVI_LOAD_BAR_H - 1);
     seg->x1 = (int16_t)(bx + pos);
     seg->y1 = (int16_t)by;
-    seg->x2 = (int16_t)(bx + pos + AVI_LOAD_SEG_W - 2);
+    seg->x2 = (int16_t)(bx + pos + seg_w - 2);
     seg->y2 = (int16_t)(by + AVI_LOAD_BAR_H - 1);
     return true;
 }
