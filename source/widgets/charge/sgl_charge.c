@@ -233,13 +233,13 @@ static void charge_layout_calc(const sgl_charge_t *ch, charge_layout_t *lay)
      * cavity is then drawn on top of it, so the shell band and the border are one
      * and the same fill. obj->border widens the whole frame, it is not the ring
      * width. */
-    pad = sgl_max(sgl_max(cross / 20, 1), (int16_t)obj->border);
-    lay->body_r = sgl_max(sgl_min(pad, cross / 2), 1);
+    pad = sgl_max(sgl_max(cross / 40, 1), (int16_t)obj->border);
+    lay->body_r = sgl_max(sgl_min(cross / 16, cross / 2), 1);
     lay->cav.x1 = lay->body.x1 + pad;
     lay->cav.y1 = lay->body.y1 + pad;
     lay->cav.x2 = lay->body.x2 - pad;
     lay->cav.y2 = lay->body.y2 - pad;
-    lay->cav_r  = sgl_max(pad / 2, 1);
+    lay->cav_r  = sgl_max(lay->body_r - pad, 1);
 
     lay->cross_len = vert ? (lay->cav.x2 - lay->cav.x1 + 1)
                           : (lay->cav.y2 - lay->cav.y1 + 1);
